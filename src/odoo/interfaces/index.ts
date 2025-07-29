@@ -30,3 +30,5 @@ export interface SearchOptions {
 export interface ReadOptions {
   fields?: string[];
 }
+
+export * from './odoo-client.interface';

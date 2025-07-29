@@ -15,13 +15,13 @@ import {
   ApiResponse,
   ApiParam,
 } from '@nestjs/swagger';
-import { CreateInvoiceDto } from './dto';
-import { OdooService } from './odoo.service';
+import { CreateInvoiceDto } from '../odoo/dto';
+import { InvoiceService } from './invoice.service';
 
 @ApiTags('Invoices')
 @Controller('invoices')
 export class InvoicesController {
-  constructor(private readonly odooService: OdooService) {}
+  constructor(private readonly invoiceService: InvoiceService) {}
 
   @Post()
   @ApiOperation({
@@ -51,10 +51,7 @@ export class InvoicesController {
   })
   async createInvoice(@Body() createInvoiceDto: CreateInvoiceDto) {
     try {
-      return await this.odooService.create(
-        'account.move',
-        createInvoiceDto.values,
-      );
+      return await this.invoiceService.create(createInvoiceDto.values);
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }
@@ -81,8 +78,7 @@ export class InvoicesController {
     },
   })
   async getDraftInvoices() {
-    return this.odooService.searchRead(
-      'account.move',
+    return this.invoiceService.searchRead(
       [
         { field: 'move_type', operator: '=', value: 'out_invoice' },
         { field: 'state', operator: '=', value: 'draft' },
@@ -113,9 +109,6 @@ export class InvoicesController {
   })
   async confirmInvoice(@Param('id') id: string) {
     const invoiceId = parseInt(id);
-    // This calls the action_post method to confirm the invoice
-    return this.odooService.executeKw('account.move', 'action_post', [
-      [invoiceId],
-    ]);
+    return this.invoiceService.executeKw('action_post', [[invoiceId]]);
   }
 }

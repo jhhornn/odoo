@@ -3,6 +3,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { OdooModule } from './odoo/odoo.module';
 import { ConfigModule } from '@nestjs/config';
+import { InvoiceModule } from './invoice/invoice.module';
+import { PartnerModule } from './partner/partner.module';
 
 @Module({
   imports: [
@@ -10,6 +12,8 @@ import { ConfigModule } from '@nestjs/config';
       isGlobal: true,
     }),
     OdooModule,
+    InvoiceModule,
+    PartnerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

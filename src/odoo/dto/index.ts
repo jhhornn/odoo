@@ -118,3 +118,20 @@ export class CreateInvoiceDto {
     invoice_line_ids: any[];
   };
 }
+
+export class OdooModelDto {
+  @ApiProperty({
+    description: 'Technical model identifier used in Odoo',
+    example: 'account_followup.followup.line',
+  })
+  model: string;
+
+  @ApiProperty({
+    description: 'Human-readable name or description of the model',
+    example: 'Follow-up Criteria',
+  })
+  name: string;
+}
+
+// grouped-models-response.dto.ts
+export type GroupedModelsResponseDto = Record<string, Record<string, string>>;

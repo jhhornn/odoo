@@ -17,6 +17,7 @@ import {
   ApiBody,
   ApiQuery,
   ApiResponse,
+  ApiOkResponse,
 } from '@nestjs/swagger';
 import { OdooService } from './odoo.service';
 import {
@@ -24,12 +25,38 @@ import {
   SearchReadDto,
   CreateRecordDto,
   UpdateRecordDto,
+  GroupedModelsResponseDto,
 } from './dto';
 
 @ApiTags('Odoo API')
 @Controller('odoo')
 export class OdooController {
   constructor(private readonly odooService: OdooService) {}
+
+  @Get('models')
+  @ApiOperation({
+    summary: 'Get all available models',
+    description:
+      'Retrieve a list of all available Odoo models in the database, including their technical name and a human-readable name.',
+  })
+  @ApiOkResponse({
+    description: 'Grouped Odoo models by category',
+    schema: {
+      example: {
+        'Core Models': {
+          'res.partner': 'Partners',
+          'res.users': 'Users',
+        },
+        Sales: {
+          'sale.order': 'Sales Orders',
+          'sale.order.line': 'Order Lines',
+        },
+      },
+    },
+  })
+  async getAllModels(): Promise<GroupedModelsResponseDto> {
+    return await this.odooService.getModels();
+  }
 
   @Get(':model/fields')
   @ApiOperation({

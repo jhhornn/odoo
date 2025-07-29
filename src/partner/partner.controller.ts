@@ -1,11 +1,11 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
-import { OdooService } from './odoo.service';
+import { PartnerService } from './partner.service';
 
 @ApiTags('Partners')
 @Controller('partners')
 export class PartnersController {
-  constructor(private readonly odooService: OdooService) {}
+  constructor(private readonly partnerService: PartnerService) {}
 
   @Get('companies')
   @ApiOperation({
@@ -35,8 +35,7 @@ export class PartnersController {
     },
   })
   async getCompanies(@Query('limit') limit?: number) {
-    return this.odooService.searchRead(
-      'res.partner',
+    return this.partnerService.searchRead(
       [{ field: 'is_company', operator: '=', value: true }],
       {
         fields: ['name', 'email', 'phone', 'country_id'],
@@ -72,8 +71,7 @@ export class PartnersController {
     },
   })
   async getCustomers(@Query('limit') limit?: number) {
-    return this.odooService.searchRead(
-      'res.partner',
+    return this.partnerService.searchRead(
       [{ field: 'customer_rank', operator: '>', value: 0 }],
       {
         fields: ['name', 'email', 'phone', 'customer_rank'],

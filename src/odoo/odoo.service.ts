@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as xmlrpc from 'xmlrpc';
+import { XmlRpcClientFactory } from './factories/xml-rpc-client.factory';
+import { IOdooClient } from './interfaces/odoo-client.interface';
 import {
   OdooConfig,
   SearchDomain,
@@ -10,12 +11,15 @@ import {
 
 @Injectable()
 export class OdooService {
-  private commonClient: any;
-  private objectClient: any;
+  private commonClient: IOdooClient;
+  private objectClient: IOdooClient;
   private config: OdooConfig;
   private uid: number | null = null;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private clientFactory: XmlRpcClientFactory,
+  ) {
     this.config = {
       url:
         this.configService.get<string>('ODOO_URL') || 'http://localhost:8069',
@@ -24,51 +28,29 @@ export class OdooService {
       password: this.configService.get<string>('ODOO_PASSWORD') || 'admin',
     };
 
-    const parsedUrl = new URL(this.config.url);
-    const isHttps = parsedUrl.protocol === 'https:';
-    const port = parsedUrl.port ? parseInt(parsedUrl.port) : isHttps ? 443 : 80;
-
-    this.commonClient = isHttps
-      ? xmlrpc.createSecureClient({
-          host: parsedUrl.hostname,
-          port: port,
-          path: '/xmlrpc/2/common',
-        })
-      : xmlrpc.createClient({
-          host: parsedUrl.hostname,
-          port: port,
-          path: '/xmlrpc/2/common',
-        });
-
-    this.objectClient = isHttps
-      ? xmlrpc.createSecureClient({
-          host: parsedUrl.hostname,
-          port: port,
-          path: '/xmlrpc/2/object',
-        })
-      : xmlrpc.createClient({
-          host: parsedUrl.hostname,
-          port: port,
-          path: '/xmlrpc/2/object',
-        });
+    this.commonClient = this.clientFactory.createClient(
+      this.config.url,
+      '/xmlrpc/2/common',
+    );
+    this.objectClient = this.clientFactory.createClient(
+      this.config.url,
+      '/xmlrpc/2/object',
+    );
   }
 
   private async authenticate(): Promise<number> {
     if (this.uid) return this.uid;
 
     return new Promise((resolve, reject) => {
-      this.commonClient.methodCall(
-        'authenticate',
-        [this.config.database, this.config.username, this.config.password, {}],
-        (error: any, value: number) => {
-          if (error) {
-            reject(
-              new HttpException(
-                'Authentication failed',
-                HttpStatus.UNAUTHORIZED,
-              ),
-            );
-          } else if (!value) {
+      this.commonClient
+        .methodCall('authenticate', [
+          this.config.database,
+          this.config.username,
+          this.config.password,
+          {},
+        ])
+        .then((value: number) => {
+          if (!value) {
             reject(
               new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED),
             );
@@ -76,8 +58,12 @@ export class OdooService {
             this.uid = value;
             resolve(value);
           }
-        },
-      );
+        })
+        .catch(() => {
+          reject(
+            new HttpException('Authentication failed', HttpStatus.UNAUTHORIZED),
+          );
+        });
     });
   }
 
@@ -89,32 +75,22 @@ export class OdooService {
   ): Promise<any> {
     const uid = await this.authenticate();
 
-    return new Promise((resolve, reject) => {
-      this.objectClient.methodCall(
-        'execute_kw',
-        [
-          this.config.database,
-          uid,
-          this.config.password,
-          model,
-          method,
-          args,
-          kwargs,
-        ],
-        (error: any, value: any) => {
-          if (error) {
-            reject(
-              new HttpException(
-                `Odoo API Error: ${error.message}`,
-                HttpStatus.BAD_REQUEST,
-              ),
-            );
-          } else {
-            resolve(value);
-          }
-        },
+    try {
+      return await this.objectClient.methodCall('execute_kw', [
+        this.config.database,
+        uid,
+        this.config.password,
+        model,
+        method,
+        args,
+        kwargs,
+      ]);
+    } catch (error: any) {
+      throw new HttpException(
+        `Odoo API Error: ${error.message}`,
+        HttpStatus.BAD_REQUEST,
       );
-    });
+    }
   }
 
   // Search for records
@@ -189,5 +165,198 @@ export class OdooService {
   ): Promise<number> {
     const searchDomain = domain.map((d) => [d.field, d.operator, d.value]);
     return this.executeKw(model, 'search_count', [searchDomain]);
+  }
+
+  private readonly MODEL_PREFIX_MAP: Record<string, string> = {
+    'res.': 'Core Models',
+    'sale.': 'Sales',
+    'account.': 'Accounting',
+    'stock.': 'Inventory',
+    'purchase.': 'Purchase',
+    'crm.': 'CRM',
+    'hr.': 'HR',
+  };
+
+  private getCategoryFromModel(model: string): string {
+    const entry = Object.entries(this.MODEL_PREFIX_MAP).find(([prefix]) =>
+      model.startsWith(prefix),
+    );
+    return entry ? entry[1] : 'Other';
+  }
+
+  async getModels(): Promise<Record<string, Record<string, string>>> {
+    const uid = await this.authenticate();
+
+    return new Promise((resolve, reject) => {
+      this.objectClient
+        .methodCall('execute_kw', [
+          this.config.database,
+          uid,
+          this.config.password,
+          'ir.model',
+          'search_read',
+          [[]],
+          { fields: ['model', 'name'], limit: 1000 },
+        ])
+        .then((models: any[]) => {
+          const grouped: Record<string, Record<string, string>> = {};
+
+          models.forEach((item) => {
+            const category = this.getCategoryFromModel(item.model);
+            if (!grouped[category]) {
+              grouped[category] = {};
+            }
+            grouped[category][item.model] = item.name;
+          });
+
+          resolve(grouped);
+        })
+        .catch((error) => {
+          reject(
+            new HttpException(
+              `Odoo API Error: ${error.message}`,
+              HttpStatus.BAD_REQUEST,
+            ),
+          );
+        });
+    });
+  }
+
+  // Get detailed model information
+  async getModelInfo(model?: string): Promise<any> {
+    const uid = await this.authenticate();
+    const domain = model ? [['model', '=', model]] : [];
+
+    return new Promise((resolve, reject) => {
+      this.objectClient
+        .methodCall('execute_kw', [
+          this.config.database,
+          uid,
+          this.config.password,
+          'ir.model',
+          'search_read',
+          [domain],
+          {
+            fields: ['model', 'name', 'info', 'state', 'transient'],
+            order: 'model ASC',
+          },
+        ])
+        .then((value: any) => {
+          resolve(value);
+        })
+        .catch((error: any) => {
+          reject(
+            new HttpException(
+              `Odoo API Error: ${error.message}`,
+              HttpStatus.BAD_REQUEST,
+            ),
+          );
+        });
+    });
+  }
+
+  // Get installed modules/apps
+  async getInstalledModules(): Promise<any[]> {
+    const uid = await this.authenticate();
+
+    return new Promise((resolve, reject) => {
+      this.commonClient
+        .methodCall('execute_kw', [
+          this.config.database,
+          uid,
+          this.config.password,
+          'ir.module.module',
+          'search_read',
+          [[['state', '=', 'installed']]],
+          {
+            fields: ['name', 'shortdesc', 'summary', 'category_id', 'version'],
+            order: 'category_id, name ASC',
+          },
+        ])
+        .then((value: any) => {
+          resolve(value);
+        })
+        .catch((error: any) => {
+          reject(
+            new HttpException(
+              `Odoo API Error: ${error.message}`,
+              HttpStatus.BAD_REQUEST,
+            ),
+          );
+        });
+    });
+  }
+
+  // Get models by module/app
+  async getModelsByModule(moduleName: string): Promise<any[]> {
+    const uid = await this.authenticate();
+
+    return new Promise((resolve, reject) => {
+      this.commonClient
+        .methodCall('execute_kw', [
+          this.config.database,
+          uid,
+          this.config.password,
+          'ir.model',
+          'search_read',
+          [[['modules', 'ilike', moduleName]]],
+          {
+            fields: ['model', 'name', 'info'],
+            order: 'model ASC',
+          },
+        ])
+        .then((value: any) => {
+          resolve(value);
+        })
+        .catch((error: any) => {
+          reject(
+            new HttpException(
+              `Odoo API Error: ${error.message}`,
+              HttpStatus.BAD_REQUEST,
+            ),
+          );
+        });
+    });
+  }
+
+  // Get field details for a model
+  async getModelFieldsDetailed(model: string): Promise<any> {
+    const uid = await this.authenticate();
+
+    return new Promise((resolve, reject) => {
+      this.commonClient
+        .methodCall('execute_kw', [
+          this.config.database,
+          uid,
+          this.config.password,
+          'ir.model.fields',
+          'search_read',
+          [[['model', '=', model]]],
+          {
+            fields: [
+              'name',
+              'field_description',
+              'ttype',
+              'required',
+              'readonly',
+              'help',
+              'relation',
+              'selection',
+            ],
+            order: 'name ASC',
+          },
+        ])
+        .then((value: any) => {
+          resolve(value);
+        })
+        .catch((error: any) => {
+          reject(
+            new HttpException(
+              `Odoo API Error: ${error.message}`,
+              HttpStatus.BAD_REQUEST,
+            ),
+          );
+        });
+    });
   }
 }
