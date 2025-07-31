@@ -21,11 +21,10 @@ export class OdooService {
     private clientFactory: XmlRpcClientFactory,
   ) {
     this.config = {
-      url:
-        this.configService.get<string>('ODOO_URL') || 'http://localhost:8069',
-      database: this.configService.get<string>('ODOO_DATABASE') || 'odoo',
-      username: this.configService.get<string>('ODOO_USERNAME') || 'admin',
-      password: this.configService.get<string>('ODOO_PASSWORD') || 'admin',
+      url: this.configService.get<string>('odoo.url'),
+      database: this.configService.get<string>('odoo.database'),
+      username: this.configService.get<string>('odoo.username'),
+      password: this.configService.get<string>('odoo.password'),
     };
 
     this.commonClient = this.clientFactory.createClient(

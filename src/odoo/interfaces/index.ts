@@ -32,3 +32,15 @@ export interface ReadOptions {
 }
 
 export * from './odoo-client.interface';
+
+export enum ResponseMessage {
+  SUCCESS = 'Request Successful!',
+  FAILED = 'Request Failed!',
+  DATA_NOT_FOUND = 'Data not found!',
+}
+
+export interface IResponseWrapper {
+  statusCode: number;
+  message: string;
+  data?: any;
+}
