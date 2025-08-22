@@ -135,6 +135,104 @@ export class CreateInvoiceDto {
 
 ---
 
+## 📄 Creating Invoices with Partners
+
+When creating an invoice, it’s important to ensure that the **partner** (customer/vendor) and the **invoice** belong to the same company. Otherwise, Odoo will return an error like:
+
+```
+Incompatible companies on records:
+- 'Draft Invoice (...)' belongs to company 'Company A'
+- 'Partner' (partner_id: 'XYZ') belongs to another company.
+```
+
+To avoid this, always fetch the `company_id` of the partner and pass it when creating the invoice.
+
+---
+
+### 1. 🔍 Find Partner with Company ID
+
+Use the `/partners` endpoint to search for the partner and include `company_id` in the returned fields.
+
+**Example request:**
+
+```http
+GET http://localhost:3000/api/v1/partners?name=Bastion&is_company=true&limit=50&offset=0&fields=name&fields=email&fields=phone&fields=country_id&fields=company_id
+```
+
+**Example response:**
+
+```json
+{
+  "statusCode": 200,
+  "message": "Request Successful!",
+  "data": 123
+}
+```
+
+Take note of the `company_id` value (e.g., `4` in this case).
+
+---
+
+### 2. 🧾 Create Invoice with Correct Company
+
+Now call the `/invoices` endpoint with both `partner_id` and `company_id`.
+
+**Example request:**
+
+```json
+
+{
+  "move_type": "out_invoice",
+  "partner_id": 3944,
+  "company_id": 4,
+  "invoice_date": "2025-07-28",
+  "payment_reference": "PO1234",
+  "invoice_line_ids": [
+    [
+      0,
+      0,
+      {
+        "name": "Consulting Services",
+        "quantity": 10,
+        "price_unit": 150,
+        "product_id": 3309
+      }
+    ],
+    [
+      0,
+      0,
+      {
+        "name": "Additional Service",
+        "quantity": 5,
+        "price_unit": 200,
+        "product_id": 3310
+      }
+    ]
+  ]
+}
+```
+
+**Example response:**
+
+```json
+{
+  "statusCode": 200,
+  "message": "Request Successful!",
+  "data": 768146
+}
+```
+
+---
+
+### ✅ Key Notes
+
+* Always include `company_id` from the partner when creating invoices.
+* `invoice_line_ids` accepts multiple lines using the Odoo triplet format `[0, 0, {fields}]`.
+* Use the `/partners` endpoint first to fetch a valid `partner_id` + `company_id`.
+* Then pass both values to `/invoices`.
+
+---
+
 ## Usage Examples
 
 ### Fetch Partners
