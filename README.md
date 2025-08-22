@@ -1,9 +1,3 @@
-Got it ✅ — based on the new work we’ve done (model-specific controllers, DTOs for partners/products/invoices, filtering support, Swagger docs, better error handling, and product/invoice ID considerations), your README should be updated to reflect these **recent developments**.
-
-Here’s the updated README with those improvements folded in:
-
----
-
 # NestJS Odoo XML-RPC API Integration
 
 A comprehensive NestJS API that interfaces with Odoo's XML-RPC endpoints, providing a RESTful wrapper for Odoo operations.
