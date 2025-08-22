@@ -16,3 +16,10 @@ export class NotFoundResponse implements IResponseWrapper {
   message: string = ResponseMessage.DATA_NOT_FOUND;
   error: string = 'Not Found';
 }
+
+import { ApiProperty } from '@nestjs/swagger';
+
+export class IdResponseDto {
+  @ApiProperty({ example: 123 })
+  id: number;
+}

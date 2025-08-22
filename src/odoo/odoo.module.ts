@@ -8,6 +8,7 @@ import { PartnersController } from '../partner/partner.controller';
 import { InvoicesController } from '../invoice/invoice.controller';
 import { PartnerService } from '../partner/partner.service';
 import { InvoiceService } from '../invoice/invoice.service';
+import { ProductService } from 'src/product/product.service';
 // import { OdooModelController } from './odoo-model.controller';
 
 @Module({
@@ -18,6 +19,7 @@ import { InvoiceService } from '../invoice/invoice.service';
     OdooServiceFactory,
     PartnerService,
     InvoiceService,
+    ProductService,
   ],
   controllers: [
     OdooController,

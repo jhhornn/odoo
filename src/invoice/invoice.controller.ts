@@ -1,22 +1,32 @@
 import {
   Controller,
-  Post,
-  Body,
-  HttpException,
-  HttpStatus,
   Get,
+  Post,
   Put,
+  Delete,
+  Body,
   Param,
+  Query,
+  ParseIntPipe,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiBody,
   ApiResponse,
   ApiParam,
+  ApiBody,
 } from '@nestjs/swagger';
-import { CreateInvoiceDto } from '../odoo/dto';
 import { InvoiceService } from './invoice.service';
+import {
+  CreateInvoiceDto,
+  UpdateInvoiceDto,
+  FilterInvoiceDto,
+  InvoiceDto,
+} from './dtos';
+import { SearchDomain } from 'src/odoo/interfaces';
 
 @ApiTags('Invoices')
 @Controller('invoices')
@@ -24,91 +34,75 @@ export class InvoicesController {
   constructor(private readonly invoiceService: InvoiceService) {}
 
   @Post()
-  @ApiOperation({
-    summary: 'Create a new invoice',
-    description: 'Create a new customer invoice or vendor bill',
-  })
-  @ApiBody({
-    type: CreateInvoiceDto,
-    description: 'Invoice data',
-  })
+  @ApiOperation({ summary: 'Create an invoice' })
   @ApiResponse({
     status: 201,
-    description: 'ID of the created invoice',
-    schema: {
-      example: 89,
-    },
+    description: 'Invoice created',
+    schema: { example: 201 },
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - invalid data',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: 'Odoo API Error: Invalid partner_id',
-      },
-    },
-  })
-  async createInvoice(@Body() createInvoiceDto: CreateInvoiceDto) {
-    try {
-      return await this.invoiceService.create(createInvoiceDto.values);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+  @ApiBody({ type: CreateInvoiceDto })
+  async create(@Body() dto: CreateInvoiceDto): Promise<number> {
+    return this.invoiceService.createInvoice(dto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'List invoices' })
+  @ApiResponse({ status: 200, type: [InvoiceDto] })
+  async findAll(@Query() filters: FilterInvoiceDto) {
+    const domain: SearchDomain[] = [];
+    if (filters.move_type) {
+      domain.push({
+        field: 'move_type',
+        operator: '=',
+        value: filters.move_type,
+      });
     }
+    if (filters.partner_id) {
+      domain.push({
+        field: 'partner_id',
+        operator: '=',
+        value: filters.partner_id,
+      });
+    }
+    if (filters.invoice_date) {
+      domain.push({
+        field: 'invoice_date',
+        operator: '=',
+        value: filters.invoice_date,
+      });
+    }
+
+    return this.invoiceService.searchRead(domain, {
+      fields: filters.fields,
+      limit: filters.limit ? Number(filters.limit) : 50,
+      offset: filters.offset ? Number(filters.offset) : 0,
+    });
   }
 
-  @Get('draft')
-  @ApiOperation({
-    summary: 'Get draft invoices',
-    description: 'Retrieve all invoices in draft state',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'List of draft invoices',
-    schema: {
-      example: [
-        {
-          id: 89,
-          name: 'INV/2025/0001',
-          partner_id: [7, 'Azure Interior'],
-          amount_total: 1500.0,
-          state: 'draft',
-        },
-      ],
-    },
-  })
-  async getDraftInvoices() {
-    return this.invoiceService.searchRead(
-      [
-        { field: 'move_type', operator: '=', value: 'out_invoice' },
-        { field: 'state', operator: '=', value: 'draft' },
-      ],
-      {
-        fields: ['name', 'partner_id', 'amount_total', 'state', 'invoice_date'],
-        limit: 100,
-      },
-    );
+  @Get(':id')
+  @ApiOperation({ summary: 'Get an invoice by ID' })
+  @ApiParam({ name: 'id', example: 201 })
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    const invoice = await this.invoiceService.findOne(id);
+    if (!invoice) {
+      throw new BadRequestException(`Invoice with ID ${id} not found`);
+    }
+    return invoice;
   }
 
-  @Put(':id/confirm')
-  @ApiOperation({
-    summary: 'Confirm an invoice',
-    description: 'Confirm a draft invoice to post it',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'Invoice ID',
-    example: 89,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Success status',
-    schema: {
-      example: true,
-    },
-  })
-  async confirmInvoice(@Param('id') id: string) {
-    const invoiceId = parseInt(id);
-    return this.invoiceService.executeKw('action_post', [[invoiceId]]);
+  @Put(':id')
+  @ApiOperation({ summary: 'Update an invoice' })
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateInvoiceDto,
+  ) {
+    return this.invoiceService.updateInvoice(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete an invoice' })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.invoiceService.deleteInvoice(id);
   }
 }

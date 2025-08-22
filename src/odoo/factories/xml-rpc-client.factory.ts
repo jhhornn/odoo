@@ -1,7 +1,8 @@
 import * as xmlrpc from 'xmlrpc';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Global } from '@nestjs/common';
 import { IOdooClient } from '../interfaces/odoo-client.interface';
 
+@Global()
 @Injectable()
 export class XmlRpcClientFactory {
   createClient(url: string, path: string): IOdooClient {

@@ -4,12 +4,7 @@ import { AppModule } from './app.module';
 import { ErrorsInterceptor } from './common/interceptors/error.interceptor';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { RequestInterceptor } from './common/interceptors/request.interceptor';
-import {
-  // UnprocessableEntityException,
-  // ValidationError,
-  // ValidationPipe,
-  VersioningType,
-} from '@nestjs/common';
+import { VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
