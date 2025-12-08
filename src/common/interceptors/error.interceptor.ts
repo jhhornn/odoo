@@ -14,21 +14,34 @@ export class ErrorsInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     return next.handle().pipe(
       catchError((error) => {
-        if (error instanceof HttpException) {
-          return throwError(() => error);
-        }
+        const status =
+          error instanceof HttpException
+            ? error.getStatus()
+            : HttpStatus.INTERNAL_SERVER_ERROR;
 
-        return throwError(
-          () =>
-            new HttpException(
-              {
-                status: HttpStatus.INTERNAL_SERVER_ERROR,
-                error: 'Internal server error',
-                message: error.message,
-              },
-              HttpStatus.INTERNAL_SERVER_ERROR,
-            ),
-        );
+        const response =
+          error instanceof HttpException
+            ? error.getResponse()
+            : {
+                statusCode: status,
+                message: 'Internal server error',
+                error: error.message,
+              };
+
+        const standardizedResponse =
+          typeof response === 'object' && response !== null
+            ? {
+                statusCode: status,
+                ...response,
+                timestamp: new Date().toISOString(),
+              }
+            : {
+                statusCode: status,
+                message: response,
+                timestamp: new Date().toISOString(),
+              };
+
+        return throwError(() => new HttpException(standardizedResponse, status));
       }),
     );
   }

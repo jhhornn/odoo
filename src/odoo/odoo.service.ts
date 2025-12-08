@@ -1,32 +1,47 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, HttpStatus, Logger } from '@nestjs/common';
 import { XmlRpcClientFactory } from './factories/xml-rpc-client.factory';
 import { IOdooClient } from './interfaces/odoo-client.interface';
 import {
-  OdooConfig,
-  SearchDomain,
-  SearchOptions,
-  ReadOptions,
-} from './interfaces';
+  OdooException,
+  OdooErrorCode,
+} from './infrastructure/exceptions/odoo.exception';
+import { SearchDomain, SearchOptions, ReadOptions } from './interfaces';
+import { OdooConfigService } from './infrastructure/config/odoo.config';
 
+/**
+ * Core service for Odoo XML-RPC communication
+ * Provides high-level abstraction over XML-RPC protocol
+ *
+ * @remarks
+ * This service handles authentication, caching, and all CRUD operations
+ * against the Odoo ERP system via XML-RPC.
+ *
+ * @example
+ * ```typescript
+ * const partners = await odooService.searchRead(
+ *   'res.partner',
+ *   [{ field: 'is_company', operator: '=', value: true }],
+ *   { fields: ['name', 'email'], limit: 10 }
+ * );
+ * ```
+ *
+ * @public
+ */
 @Injectable()
 export class OdooService {
+  private readonly logger = new Logger(OdooService.name);
   private commonClient: IOdooClient;
   private objectClient: IOdooClient;
-  private config: OdooConfig;
   private uid: number | null = null;
 
   constructor(
-    private configService: ConfigService,
+    private config: OdooConfigService,
     private clientFactory: XmlRpcClientFactory,
   ) {
-    this.config = {
-      url: this.configService.get<string>('odoo.url'),
-      database: this.configService.get<string>('odoo.database'),
-      username: this.configService.get<string>('odoo.username'),
-      password: this.configService.get<string>('odoo.password'),
-    };
+    this.initializeClients();
+  }
 
+  private initializeClients(): void {
     this.commonClient = this.clientFactory.createClient(
       this.config.url,
       '/xmlrpc/2/common',
@@ -35,37 +50,66 @@ export class OdooService {
       this.config.url,
       '/xmlrpc/2/object',
     );
+    this.logger.log(`Connected to Odoo at ${this.config.url}`);
   }
 
+  /**
+   * Authenticate with Odoo and cache user ID
+   * @private
+   * @returns User ID
+   * @throws {OdooException} When authentication fails
+   */
   private async authenticate(): Promise<number> {
     if (this.uid) return this.uid;
 
-    return new Promise((resolve, reject) => {
-      this.commonClient
-        .methodCall('authenticate', [
-          this.config.database,
-          this.config.username,
-          this.config.password,
-          {},
-        ])
-        .then((value: number) => {
-          if (!value) {
-            reject(
-              new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED),
-            );
-          } else {
-            this.uid = value;
-            resolve(value);
-          }
-        })
-        .catch(() => {
-          reject(
-            new HttpException('Authentication failed', HttpStatus.UNAUTHORIZED),
-          );
-        });
-    });
+    try {
+      const uid = await this.commonClient.methodCall('authenticate', [
+        this.config.database,
+        this.config.username,
+        this.config.password,
+        {},
+      ]);
+
+      if (!uid) {
+        throw new OdooException(
+          OdooErrorCode.INVALID_CREDENTIALS,
+          'Authentication failed - check credentials',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+
+      this.uid = uid;
+      this.logger.log(`Authenticated successfully (UID: ${uid})`);
+      return uid;
+    } catch (error: any) {
+      this.logger.error(`Auth error: ${error.message}`);
+      throw new OdooException(
+        OdooErrorCode.AUTHENTICATION_FAILED,
+        error.message,
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
   }
 
+  /**
+   * Execute arbitrary Odoo RPC method
+   *
+   * @param model - Odoo model name (e.g., 'res.partner', 'account.move')
+   * @param method - Method name (e.g., 'search', 'read', 'create')
+   * @param args - Positional arguments array
+   * @param kwargs - Named arguments object
+   * @returns Method execution result
+   * @throws {OdooException} When RPC call fails
+   *
+   * @example
+   * ```typescript
+   * const result = await odooService.executeKw(
+   *   'account.move',
+   *   'action_post',
+   *   [[invoiceId]]
+   * );
+   * ```
+   */
   async executeKw(
     model: string,
     method: string,
@@ -85,24 +129,60 @@ export class OdooService {
         kwargs,
       ]);
     } catch (error: any) {
-      throw new HttpException(
-        `Odoo API Error: ${error.message}`,
+      this.logger.error(`RPC Error [${model}.${method}]: ${error.message}`);
+      throw new OdooException(
+        OdooErrorCode.API_ERROR,
+        `${model}.${method} failed: ${error.message}`,
         HttpStatus.BAD_REQUEST,
       );
     }
   }
 
-  // Search for records
+  /**
+   * Search for record IDs matching domain criteria
+   *
+   * @param model - Odoo model name
+   * @param domain - Search criteria array
+   * @param options - Limit, offset, and order options
+   * @returns Array of record IDs
+   *
+   * @example
+   * ```typescript
+   * const ids = await odooService.search(
+   *   'res.partner',
+   *   [{ field: 'customer_rank', operator: '>', value: 0 }],
+   *   { limit: 50, order: 'name asc' }
+   * );
+   * ```
+   */
   async search(
     model: string,
     domain: SearchDomain[] = [],
     options: SearchOptions = {},
   ): Promise<number[]> {
-    const searchDomain = domain.map((d) => [d.field, d.operator, d.value]);
+    const searchDomain = domain.map((d) =>
+      typeof d === 'string' ? d : [d.field, d.operator, d.value],
+    );
     return this.executeKw(model, 'search', [searchDomain], options);
   }
 
-  // Read records by IDs
+  /**
+   * Read records by their IDs
+   *
+   * @param model - Odoo model name
+   * @param ids - Array of record IDs
+   * @param options - Fields to retrieve
+   * @returns Array of record objects
+   *
+   * @example
+   * ```typescript
+   * const partners = await odooService.read(
+   *   'res.partner',
+   *   [7, 14, 21],
+   *   { fields: ['name', 'email', 'phone'] }
+   * );
+   * ```
+   */
   async read(
     model: string,
     ids: number[],
@@ -111,22 +191,75 @@ export class OdooService {
     return this.executeKw(model, 'read', [ids], options);
   }
 
-  // Search and read in one call
+  /**
+   * Search and read records in a single operation
+   * More efficient than calling search() then read()
+   *
+   * @param model - Odoo model name
+   * @param domain - Search criteria
+   * @param options - Fields, limit, offset, and order
+   * @returns Array of record objects
+   *
+   * @example
+   * ```typescript
+   * const invoices = await odooService.searchRead(
+   *   'account.move',
+   *   [
+   *     { field: 'state', operator: '=', value: 'draft' },
+   *     { field: 'move_type', operator: '=', value: 'out_invoice' }
+   *   ],
+   *   { fields: ['name', 'amount_total'], limit: 100 }
+   * );
+   * ```
+   */
   async searchRead(
     model: string,
     domain: SearchDomain[] = [],
     options: SearchOptions & ReadOptions = {},
   ): Promise<any[]> {
-    const searchDomain = domain.map((d) => [d.field, d.operator, d.value]);
+    const searchDomain = domain.map((d) =>
+      typeof d === 'string' ? d : [d.field, d.operator, d.value],
+    );
     return this.executeKw(model, 'search_read', [searchDomain], options);
   }
 
-  // Create a new record
+  /**
+   * Create a new record
+   *
+   * @param model - Odoo model name
+   * @param values - Field values for new record
+   * @returns ID of created record
+   *
+   * @example
+   * ```typescript
+   * const partnerId = await odooService.create('res.partner', {
+   *   name: 'Acme Corp',
+   *   email: 'contact@acme.com',
+   *   is_company: true
+   * });
+   * ```
+   */
   async create(model: string, values: Record<string, any>): Promise<number> {
     return this.executeKw(model, 'create', [values]);
   }
 
-  // Update existing records
+  /**
+   * Update existing records
+   *
+   * @param model - Odoo model name
+   * @param ids - Array of record IDs to update
+   * @param values - Fields to update
+   * @returns True if successful
+   *
+   * @example
+   * ```typescript
+   * await odooService.write(
+   *   'res.partner',
+   *   [42],
+   *   { phone: '+1234567890', email: 'new@email.com' }
+   * );
+   * ```
+   */
   async write(
     model: string,
     ids: number[],
@@ -135,12 +268,29 @@ export class OdooService {
     return this.executeKw(model, 'write', [ids, values]);
   }
 
-  // Delete records
+  /**
+   * Delete records permanently
+   *
+   * @param model - Odoo model name
+   * @param ids - Array of record IDs to delete
+   * @returns True if successful
+   *
+   * @example
+   * ```typescript
+   * await odooService.unlink('res.partner', [123, 456]);
+   * ```
+   */
   async unlink(model: string, ids: number[]): Promise<boolean> {
     return this.executeKw(model, 'unlink', [ids]);
   }
 
-  // Get model fields information
+  /**
+   * Get metadata about model fields
+   *
+   * @param model - Odoo model name
+   * @param attributes - Attributes to retrieve
+   * @returns Field metadata object
+   */
   async fieldsGet(
     model: string,
     attributes: string[] = ['string', 'help', 'type'],
@@ -148,7 +298,14 @@ export class OdooService {
     return this.executeKw(model, 'fields_get', [], { attributes });
   }
 
-  // Search by name
+  /**
+   * Search records by name pattern
+   *
+   * @param model - Odoo model name
+   * @param name - Name pattern to search
+   * @param options - Search options
+   * @returns Array of [id, name] tuples
+   */
   async nameSearch(
     model: string,
     name: string = '',
@@ -157,205 +314,16 @@ export class OdooService {
     return this.executeKw(model, 'name_search', [name], options);
   }
 
-  // Count records
+  /**
+   * Count records matching domain
+   */
   async searchCount(
     model: string,
     domain: SearchDomain[] = [],
   ): Promise<number> {
-    const searchDomain = domain.map((d) => [d.field, d.operator, d.value]);
-    return this.executeKw(model, 'search_count', [searchDomain]);
-  }
-
-  private readonly MODEL_PREFIX_MAP: Record<string, string> = {
-    'res.': 'Core Models',
-    'sale.': 'Sales',
-    'account.': 'Accounting',
-    'stock.': 'Inventory',
-    'purchase.': 'Purchase',
-    'crm.': 'CRM',
-    'hr.': 'HR',
-  };
-
-  private getCategoryFromModel(model: string): string {
-    const entry = Object.entries(this.MODEL_PREFIX_MAP).find(([prefix]) =>
-      model.startsWith(prefix),
+    const searchDomain = domain.map((d) =>
+      typeof d === 'string' ? d : [d.field, d.operator, d.value],
     );
-    return entry ? entry[1] : 'Other';
-  }
-
-  async getModels(): Promise<Record<string, Record<string, string>>> {
-    const uid = await this.authenticate();
-
-    return new Promise((resolve, reject) => {
-      this.objectClient
-        .methodCall('execute_kw', [
-          this.config.database,
-          uid,
-          this.config.password,
-          'ir.model',
-          'search_read',
-          [[]],
-          { fields: ['model', 'name'], limit: 1000 },
-        ])
-        .then((models: any[]) => {
-          const grouped: Record<string, Record<string, string>> = {};
-
-          models.forEach((item) => {
-            const category = this.getCategoryFromModel(item.model);
-            if (!grouped[category]) {
-              grouped[category] = {};
-            }
-            grouped[category][item.model] = item.name;
-          });
-
-          resolve(grouped);
-        })
-        .catch((error) => {
-          reject(
-            new HttpException(
-              `Odoo API Error: ${error.message}`,
-              HttpStatus.BAD_REQUEST,
-            ),
-          );
-        });
-    });
-  }
-
-  // Get detailed model information
-  async getModelInfo(model?: string): Promise<any> {
-    const uid = await this.authenticate();
-    const domain = model ? [['model', '=', model]] : [];
-
-    return new Promise((resolve, reject) => {
-      this.objectClient
-        .methodCall('execute_kw', [
-          this.config.database,
-          uid,
-          this.config.password,
-          'ir.model',
-          'search_read',
-          [domain],
-          {
-            fields: ['model', 'name', 'info', 'state', 'transient'],
-            order: 'model ASC',
-          },
-        ])
-        .then((value: any) => {
-          resolve(value);
-        })
-        .catch((error: any) => {
-          reject(
-            new HttpException(
-              `Odoo API Error: ${error.message}`,
-              HttpStatus.BAD_REQUEST,
-            ),
-          );
-        });
-    });
-  }
-
-  // Get installed modules/apps
-  async getInstalledModules(): Promise<any[]> {
-    const uid = await this.authenticate();
-
-    return new Promise((resolve, reject) => {
-      this.commonClient
-        .methodCall('execute_kw', [
-          this.config.database,
-          uid,
-          this.config.password,
-          'ir.module.module',
-          'search_read',
-          [[['state', '=', 'installed']]],
-          {
-            fields: ['name', 'shortdesc', 'summary', 'category_id', 'version'],
-            order: 'category_id, name ASC',
-          },
-        ])
-        .then((value: any) => {
-          resolve(value);
-        })
-        .catch((error: any) => {
-          reject(
-            new HttpException(
-              `Odoo API Error: ${error.message}`,
-              HttpStatus.BAD_REQUEST,
-            ),
-          );
-        });
-    });
-  }
-
-  // Get models by module/app
-  async getModelsByModule(moduleName: string): Promise<any[]> {
-    const uid = await this.authenticate();
-
-    return new Promise((resolve, reject) => {
-      this.commonClient
-        .methodCall('execute_kw', [
-          this.config.database,
-          uid,
-          this.config.password,
-          'ir.model',
-          'search_read',
-          [[['modules', 'ilike', moduleName]]],
-          {
-            fields: ['model', 'name', 'info'],
-            order: 'model ASC',
-          },
-        ])
-        .then((value: any) => {
-          resolve(value);
-        })
-        .catch((error: any) => {
-          reject(
-            new HttpException(
-              `Odoo API Error: ${error.message}`,
-              HttpStatus.BAD_REQUEST,
-            ),
-          );
-        });
-    });
-  }
-
-  // Get field details for a model
-  async getModelFieldsDetailed(model: string): Promise<any> {
-    const uid = await this.authenticate();
-
-    return new Promise((resolve, reject) => {
-      this.commonClient
-        .methodCall('execute_kw', [
-          this.config.database,
-          uid,
-          this.config.password,
-          'ir.model.fields',
-          'search_read',
-          [[['model', '=', model]]],
-          {
-            fields: [
-              'name',
-              'field_description',
-              'ttype',
-              'required',
-              'readonly',
-              'help',
-              'relation',
-              'selection',
-            ],
-            order: 'name ASC',
-          },
-        ])
-        .then((value: any) => {
-          resolve(value);
-        })
-        .catch((error: any) => {
-          reject(
-            new HttpException(
-              `Odoo API Error: ${error.message}`,
-              HttpStatus.BAD_REQUEST,
-            ),
-          );
-        });
-    });
+    return this.executeKw(model, 'search_count', [searchDomain]);
   }
 }

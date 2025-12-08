@@ -4,9 +4,9 @@ import {
   Post,
   Put,
   Delete,
-  Body,
-  Param,
   Query,
+  Param,
+  Body,
   ParseIntPipe,
   HttpCode,
   HttpStatus,
@@ -15,7 +15,7 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
+  ApiQuery,
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
@@ -25,8 +25,9 @@ import {
   UpdateProductDto,
   FilterProductDto,
   ProductDto,
-} from './dtos';
+} from './dto';
 import { SearchDomain } from 'src/odoo/interfaces';
+import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
 
 @ApiTags('Products')
 @Controller('products')
@@ -34,29 +35,31 @@ export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a product' })
-  @ApiResponse({
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new product' })
+  @ApiBody({ type: CreateProductDto })
+  @ApiStandardResponse({
     status: 201,
     description: 'Product created',
-    schema: { example: 101 },
   })
-  @ApiBody({ type: CreateProductDto })
   async create(@Body() dto: CreateProductDto): Promise<number> {
     return this.productService.createProduct(dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List products' })
-  @ApiResponse({
+  @ApiStandardResponse({
     status: 200,
     description: 'List of products',
     type: [ProductDto],
   })
   async findAll(@Query() filters: FilterProductDto) {
     const domain: SearchDomain[] = [];
+
     if (filters.name) {
       domain.push({ field: 'name', operator: 'ilike', value: filters.name });
     }
+
     if (filters.default_code) {
       domain.push({
         field: 'default_code',
@@ -75,6 +78,7 @@ export class ProductController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a product by ID' })
   @ApiParam({ name: 'id', example: 101 })
+  @ApiStandardResponse({ status: 200, description: 'Product details', type: ProductDto })
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const product = await this.productService.findOne(id);
     if (!product) {
@@ -97,5 +101,87 @@ export class ProductController {
   @ApiOperation({ summary: 'Delete a product' })
   async remove(@Param('id', ParseIntPipe) id: number) {
     await this.productService.deleteProduct(id);
+  }
+
+  @Get('available')
+  @ApiOperation({ summary: 'List products available for sale' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiStandardResponse({ status: 200, description: 'Available products' })
+  async getAvailableProducts(@Query('limit') limit?: number) {
+    return this.productService.findAvailableProducts(limit);
+  }
+
+  @Get('in-stock')
+  @ApiOperation({ summary: 'List products currently in stock' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiStandardResponse({ status: 200, description: 'Products in stock' })
+  async getInStockProducts(@Query('limit') limit?: number) {
+    return this.productService.findInStock(limit);
+  }
+
+  @Get('low-stock')
+  @ApiOperation({ summary: 'List products with low stock levels' })
+  @ApiQuery({
+    name: 'threshold',
+    required: false,
+    type: Number,
+    description: 'Stock threshold (default: 5)',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiStandardResponse({ status: 200, description: 'Low stock products' })
+  async getLowStockProducts(
+    @Query('threshold') threshold?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.productService.findLowStock(threshold, limit);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search products by name or reference' })
+  @ApiQuery({ name: 'q', required: true, description: 'Search query' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiStandardResponse({ status: 200, description: 'Search results' })
+  async searchProducts(
+    @Query('q') query: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.productService.searchProducts(query, limit);
+  }
+
+  @Get('category/:categoryId')
+  @ApiOperation({ summary: 'Get products by category' })
+  @ApiParam({
+    name: 'categoryId',
+    type: Number,
+    description: 'Product category ID',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiStandardResponse({ status: 200, description: 'Products in category' })
+  async getProductsByCategory(
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.productService.findByCategory(categoryId, limit);
+  }
+
+  @Put(':id/price')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update product price' })
+  @ApiParam({ name: 'id', type: Number, description: 'Product ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        price: { type: 'number', example: 99.99 },
+      },
+      required: ['price'],
+    },
+  })
+  @ApiStandardResponse({ status: 200, description: 'Price updated successfully' })
+  async updatePrice(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('price') price: number,
+  ) {
+    return this.productService.updatePrice(id, price);
   }
 }

@@ -4,405 +4,161 @@ import {
   Post,
   Put,
   Delete,
-  Param,
   Body,
+  Param,
   Query,
-  HttpException,
+  HttpCode,
   HttpStatus,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiParam,
   ApiBody,
+  ApiParam,
   ApiQuery,
-  ApiResponse,
-  ApiOkResponse,
 } from '@nestjs/swagger';
 import { OdooService } from './odoo.service';
 import {
-  SearchDto,
   SearchReadDto,
   CreateRecordDto,
   UpdateRecordDto,
-  GroupedModelsResponseDto,
+  SearchDto,
 } from './dto';
+import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
 
-@ApiTags('Odoo API')
+@ApiTags('Odoo Generic')
 @Controller('odoo')
 export class OdooController {
   constructor(private readonly odooService: OdooService) {}
 
-  @Get('models')
-  @ApiOperation({
-    summary: 'Get all available models',
-    description:
-      'Retrieve a list of all available Odoo models in the database, including their technical name and a human-readable name.',
-  })
-  @ApiOkResponse({
-    description: 'Grouped Odoo models by category',
-    schema: {
-      example: {
-        'Core Models': {
-          'res.partner': 'Partners',
-          'res.users': 'Users',
-        },
-        Sales: {
-          'sale.order': 'Sales Orders',
-          'sale.order.line': 'Order Lines',
-        },
-      },
-    },
-  })
-  async getAllModels(): Promise<GroupedModelsResponseDto> {
-    return await this.odooService.getModels();
-  }
-
-  @Get(':model/fields')
-  @ApiOperation({
-    summary: 'Get model fields information',
-    description:
-      'Retrieve metadata about fields for any Odoo model including field types, labels, and help text',
-  })
-  @ApiParam({
-    name: 'model',
-    description:
-      'Odoo model name (e.g., res.partner, account.move, product.product)',
-    example: 'res.partner',
-  })
-  @ApiQuery({
-    name: 'attributes',
-    required: false,
-    type: [String],
-    description: 'Field attributes to retrieve',
-    example: ['string', 'help', 'type'],
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Model fields information',
-    schema: {
-      example: {
-        name: { string: 'Name', type: 'char', help: 'The name of the partner' },
-        email: { string: 'Email', type: 'char' },
-      },
-    },
-  })
-  async getModelFields(
-    @Param('model') model: string,
-    @Query('attributes') attributes?: string[],
-  ) {
-    try {
-      const attributesList = attributes || ['string', 'help', 'type'];
-      return await this.odooService.fieldsGet(model, attributesList);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
   @Post(':model/search')
-  @ApiOperation({
-    summary: 'Search for record IDs',
-    description:
-      'Search for records matching the given domain and return their IDs',
-  })
-  @ApiParam({
-    name: 'model',
-    description: 'Odoo model name',
-    example: 'res.partner',
-  })
-  @ApiBody({
-    type: SearchDto,
-    description: 'Search criteria',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Array of record IDs',
-    schema: {
-      example: [7, 14, 23, 45],
-    },
-  })
-  async searchRecords(
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Search records' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiBody({ type: SearchDto })
+  @ApiStandardResponse({ status: 200, description: 'List of record IDs', type: [Number] })
+  async search(
     @Param('model') model: string,
     @Body() searchDto: SearchDto,
-  ) {
-    try {
-      return await this.odooService.search(model, searchDto.domain || [], {
+  ): Promise<number[]> {
+    return this.odooService.search(
+      model,
+      searchDto.domain,
+      {
         limit: searchDto.limit,
         offset: searchDto.offset,
         order: searchDto.order,
-      });
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+      },
+    );
   }
 
-  @Post(':model/search-read')
-  @ApiOperation({
-    summary: 'Search and read records in one call',
-    description:
-      'Search for records and return their data in a single operation',
-  })
-  @ApiParam({
-    name: 'model',
-    description: 'Odoo model name',
-    example: 'res.partner',
-  })
-  @ApiBody({
-    type: SearchReadDto,
-    description: 'Search criteria and fields to retrieve',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Array of record objects',
-    schema: {
-      example: [
-        { id: 7, name: 'Azure Interior', email: 'azure@example.com' },
-        { id: 14, name: 'Deco Addict', email: 'deco@example.com' },
-      ],
-    },
-  })
-  async searchReadRecords(
+  @Post(':model/search_read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Search and read records' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiBody({ type: SearchReadDto })
+  @ApiStandardResponse({ status: 200, description: 'List of records' })
+  async searchRead(
     @Param('model') model: string,
     @Body() searchReadDto: SearchReadDto,
-  ) {
-    try {
-      return await this.odooService.searchRead(
-        model,
-        searchReadDto.domain || [],
-        {
-          limit: searchReadDto.limit,
-          offset: searchReadDto.offset,
-          order: searchReadDto.order,
-          fields: searchReadDto.fields,
-        },
-      );
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
-  @Get(':model/:ids')
-  @ApiOperation({
-    summary: 'Read records by IDs',
-    description: 'Retrieve specific records by their IDs',
-  })
-  @ApiParam({
-    name: 'model',
-    description: 'Odoo model name',
-    example: 'res.partner',
-  })
-  @ApiParam({
-    name: 'ids',
-    description: 'Comma-separated list of record IDs',
-    example: '7,14,23',
-  })
-  @ApiQuery({
-    name: 'fields',
-    required: false,
-    type: [String],
-    description: 'Fields to retrieve',
-    example: ['name', 'email', 'phone'],
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Array of record objects',
-    schema: {
-      example: [{ id: 7, name: 'Azure Interior', email: 'azure@example.com' }],
-    },
-  })
-  async readRecords(
-    @Param('model') model: string,
-    @Param('ids') idsParam: string,
-    @Query('fields') fields?: string[],
-  ) {
-    try {
-      const ids = idsParam.split(',').map((id) => parseInt(id.trim()));
-      return await this.odooService.read(model, ids, { fields });
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+  ): Promise<any[]> {
+    return this.odooService.searchRead(
+      model,
+      searchReadDto.domain,
+      {
+        fields: searchReadDto.fields,
+        limit: searchReadDto.limit,
+        offset: searchReadDto.offset,
+        order: searchReadDto.order,
+      },
+    );
   }
 
   @Post(':model')
-  @ApiOperation({
-    summary: 'Create a new record',
-    description: 'Create a new record in the specified model',
-  })
-  @ApiParam({
-    name: 'model',
-    description: 'Odoo model name',
-    example: 'res.partner',
-  })
-  @ApiBody({
-    type: CreateRecordDto,
-    description: 'Record data to create',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'ID of the created record',
-    schema: {
-      example: 156,
-    },
-  })
-  async createRecord(
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a record' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiBody({ type: CreateRecordDto })
+  @ApiStandardResponse({ status: 201, description: 'Created record ID', type: Number })
+  async create(
     @Param('model') model: string,
-    @Body() createDto: CreateRecordDto,
-  ) {
-    try {
-      return await this.odooService.create(model, createDto.values);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+    @Body() createRecordDto: CreateRecordDto,
+  ): Promise<number> {
+    return this.odooService.create(model, createRecordDto.values);
   }
 
-  @Put(':model/:ids')
-  @ApiOperation({
-    summary: 'Update existing records',
-    description: 'Update one or more existing records with new values',
-  })
-  @ApiParam({
-    name: 'model',
-    description: 'Odoo model name',
-    example: 'res.partner',
-  })
-  @ApiParam({
-    name: 'ids',
-    description: 'Comma-separated list of record IDs to update',
-    example: '7,14',
-  })
-  @ApiBody({
-    type: UpdateRecordDto,
-    description: 'Fields to update',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Success status',
-    schema: {
-      example: true,
-    },
-  })
-  async updateRecords(
+  @Get(':model/:id')
+  @ApiOperation({ summary: 'Read a record' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiParam({ name: 'id', example: 1 })
+  @ApiStandardResponse({ status: 200, description: 'Record details' })
+  async read(
     @Param('model') model: string,
-    @Param('ids') idsParam: string,
-    @Body() updateDto: UpdateRecordDto,
-  ) {
-    try {
-      const ids = idsParam.split(',').map((id) => parseInt(id.trim()));
-      return await this.odooService.write(model, ids, updateDto.values);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<any> {
+    const results = await this.odooService.read(model, [id]);
+    return results.length > 0 ? results[0] : null;
   }
 
-  @Delete(':model/:ids')
-  @ApiOperation({
-    summary: 'Delete records',
-    description: 'Delete one or more records by their IDs',
-  })
-  @ApiParam({
-    name: 'model',
-    description: 'Odoo model name',
-    example: 'res.partner',
-  })
-  @ApiParam({
-    name: 'ids',
-    description: 'Comma-separated list of record IDs to delete',
-    example: '156,157',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Success status',
-    schema: {
-      example: true,
-    },
-  })
-  async deleteRecords(
+  @Put(':model/:id')
+  @ApiOperation({ summary: 'Update a record' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiParam({ name: 'id', example: 1 })
+  @ApiBody({ type: UpdateRecordDto })
+  @ApiStandardResponse({ status: 200, description: 'Record updated successfully', type: Boolean })
+  async write(
     @Param('model') model: string,
-    @Param('ids') idsParam: string,
-  ) {
-    try {
-      const ids = idsParam.split(',').map((id) => parseInt(id.trim()));
-      return await this.odooService.unlink(model, ids);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateRecordDto: UpdateRecordDto,
+  ): Promise<boolean> {
+    return this.odooService.write(model, [id], updateRecordDto.values);
+  }
+
+  @Delete(':model/:id')
+  @ApiOperation({ summary: 'Delete a record' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiParam({ name: 'id', example: 1 })
+  @ApiStandardResponse({ status: 200, description: 'Record deleted successfully', type: Boolean })
+  async unlink(
+    @Param('model') model: string,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<boolean> {
+    return this.odooService.unlink(model, [id]);
+  }
+
+  @Get(':model/fields')
+  @ApiOperation({ summary: 'Get model fields metadata' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiStandardResponse({ status: 200, description: 'Model fields metadata' })
+  async fieldsGet(@Param('model') model: string): Promise<any> {
+    return this.odooService.fieldsGet(model);
   }
 
   @Get(':model/name-search')
-  @ApiOperation({
-    summary: 'Search records by name',
-    description: 'Search for records using name matching',
-  })
-  @ApiParam({
-    name: 'model',
-    description: 'Odoo model name',
-    example: 'res.partner',
-  })
-  @ApiQuery({
-    name: 'name',
-    required: false,
-    description: 'Name to search for',
-    example: 'Azure',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Maximum number of results',
-    example: 10,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Array of [id, name] pairs',
-    schema: {
-      example: [
-        [7, 'Azure Interior'],
-        [14, 'Azure Solutions'],
-      ],
-    },
-  })
+  @ApiOperation({ summary: 'Search by name pattern' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiQuery({ name: 'name', required: false })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiStandardResponse({ status: 200, description: 'Name search results' })
   async nameSearch(
     @Param('model') model: string,
     @Query('name') name?: string,
     @Query('limit') limit?: number,
   ) {
-    try {
-      return await this.odooService.nameSearch(model, name || '', { limit });
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+    return this.odooService.nameSearch(model, name || '', { limit });
   }
 
-  @Post(':model/count')
-  @ApiOperation({
-    summary: 'Count records matching domain',
-    description:
-      'Count the number of records that match the given search criteria',
-  })
-  @ApiParam({
-    name: 'model',
-    description: 'Odoo model name',
-    example: 'res.partner',
-  })
-  @ApiBody({
-    type: SearchDto,
-    description: 'Search criteria',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Number of matching records',
-    schema: {
-      example: 42,
-    },
-  })
-  async countRecords(
+  @Post(':model/search-count')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Count records' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiBody({ type: SearchDto })
+  @ApiStandardResponse({ status: 200, description: 'Count of records', type: Number })
+  async searchCount(
     @Param('model') model: string,
     @Body() searchDto: SearchDto,
-  ) {
-    try {
-      return await this.odooService.searchCount(model, searchDto.domain || []);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+  ): Promise<number> {
+    return this.odooService.searchCount(model, searchDto.domain);
   }
 }

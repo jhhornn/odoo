@@ -1,50 +1,127 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { BaseOdooService } from '../odoo/services/base.service';
+import { Injectable } from '@nestjs/common';
+import { BaseOdooService } from '../common/services/base.service';
 import { OdooService } from '../odoo/odoo.service';
-import { CreatePartnerDto, UpdatePartnerDto } from './dtos';
 
+/**
+ * Service for Partner (res.partner) operations
+ * Provides business logic for contacts and companies
+ */
 @Injectable()
 export class PartnerService extends BaseOdooService {
   constructor(odooService: OdooService) {
     super(odooService, 'res.partner');
   }
 
-  async createPartner(dto: CreatePartnerDto) {
-    // Optional validation: check if email already exists
-    if (dto.email) {
-      const existing = await this.searchRead(
-        [{ field: 'email', operator: '=', value: dto.email }],
-        { fields: ['id'], limit: 1 },
-      );
-      if (existing.length > 0) {
-        throw new BadRequestException(
-          `Partner with email ${dto.email} already exists`,
-        );
-      }
-    }
-
-    return this.create(dto);
+  /**
+   * Find all company partners
+   */
+  async findCompanies(limit = 50) {
+    return this.searchRead(
+      [{ field: 'is_company', operator: '=', value: true }],
+      {
+        fields: ['name', 'email', 'phone', 'website', 'country_id', 'vat'],
+        limit,
+        order: 'name asc',
+      },
+    );
   }
 
-  async updatePartner(id: number, dto: UpdatePartnerDto) {
-    const partner = await this.findOne(id);
-    if (!partner) {
-      throw new BadRequestException(`Partner with ID ${id} not found`);
-    }
-
-    return this.update(id, dto);
+  /**
+   * Find all customer partners
+   */
+  async findCustomers(limit = 50) {
+    return this.searchRead(
+      [{ field: 'customer_rank', operator: '>', value: 0 }],
+      {
+        fields: ['name', 'email', 'phone', 'customer_rank', 'country_id'],
+        limit,
+        order: 'customer_rank desc',
+      },
+    );
   }
 
-  async deletePartner(id: number) {
-    const partner = await this.findOne(id);
-    if (!partner) {
-      throw new BadRequestException(`Partner with ID ${id} not found`);
-    }
-    return this.delete(id);
+  /**
+   * Find all supplier partners
+   */
+  async findSuppliers(limit = 50) {
+    return this.searchRead(
+      [{ field: 'supplier_rank', operator: '>', value: 0 }],
+      {
+        fields: ['name', 'email', 'phone', 'supplier_rank', 'country_id'],
+        limit,
+        order: 'supplier_rank desc',
+      },
+    );
   }
 
-  async exists(id: number): Promise<boolean> {
-    const partner = await this.findOne(id, ['id']);
-    return !!partner;
+  /**
+   * Search partners by name or email
+   */
+  async searchByNameOrEmail(query: string, limit = 10) {
+    return this.searchRead(
+      [
+        '|',
+        { field: 'name', operator: 'ilike', value: query },
+        { field: 'email', operator: 'ilike', value: query },
+      ],
+      {
+        fields: ['name', 'email', 'phone', 'is_company'],
+        limit,
+      },
+    );
+  }
+
+  /**
+   * Find partners by country
+   */
+  async findByCountry(countryId: number, limit = 50) {
+    return this.searchRead(
+      [{ field: 'country_id', operator: '=', value: countryId }],
+      {
+        fields: ['name', 'email', 'city', 'state_id'],
+        limit,
+      },
+    );
+  }
+
+  /**
+   * Create a new partner
+   */
+  async createPartner(data: {
+    name: string;
+    email?: string;
+    phone?: string;
+    is_company?: boolean;
+    [key: string]: any;
+  }) {
+    return this.create(data);
+  }
+
+  /**
+   * Update partner information
+   */
+  async updatePartner(partnerId: number, data: Record<string, any>) {
+    return this.update(partnerId, data);
+  }
+
+  /**
+   * Delete a partner
+   */
+  async deletePartner(partnerId: number) {
+    return this.delete(partnerId);
+  }
+
+  /**
+   * Archive a partner (soft delete)
+   */
+  async archivePartner(partnerId: number) {
+    return this.update(partnerId, { active: false });
+  }
+
+  /**
+   * Unarchive a partner
+   */
+  async unarchivePartner(partnerId: number) {
+    return this.update(partnerId, { active: true });
   }
 }

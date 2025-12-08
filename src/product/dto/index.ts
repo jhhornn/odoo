@@ -1,5 +1,7 @@
-// product.dto.ts
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export * from './create-product.dto';
+export * from './update-product.dto';
 
 export class ProductDto {
   @ApiProperty({ example: 101 })
@@ -20,25 +22,6 @@ export class ProductDto {
   @ApiPropertyOptional({ example: 'service', description: 'Type of product' })
   type?: 'consu' | 'service' | 'product';
 }
-
-export class CreateProductDto {
-  @ApiProperty({ example: 'Consulting Service' })
-  name: string;
-
-  @ApiPropertyOptional({ example: 'CONS-001' })
-  default_code?: string;
-
-  @ApiPropertyOptional({ example: 150.0 })
-  list_price?: number;
-
-  @ApiPropertyOptional({ example: 100.0 })
-  standard_price?: number;
-
-  @ApiPropertyOptional({ example: 'service' })
-  type?: 'consu' | 'service' | 'product';
-}
-
-export class UpdateProductDto extends PartialType(CreateProductDto) {}
 
 export class FilterProductDto {
   @ApiPropertyOptional({ example: 'CONS', description: 'Search by name/code' })

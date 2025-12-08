@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class PartnerDto {
   @ApiProperty({ example: 7 })
@@ -33,28 +34,61 @@ export class PartnerDto {
 }
 
 export class CreatePartnerDto {
-  @ApiProperty({ example: 'John Doe' })
+  @ApiProperty({
+    example: 'John Doe',
+    description: 'Name of the partner (company or individual)',
+  })
+  @IsString()
+  @IsNotEmpty()
   name: string;
 
-  @ApiPropertyOptional({ example: 'john@doe.com' })
+  @ApiPropertyOptional({
+    example: 'john@doe.com',
+    description: 'Email address',
+  })
+  @IsEmail()
+  @IsOptional()
   email?: string;
 
-  @ApiPropertyOptional({ example: '+2348012345678' })
+  @ApiPropertyOptional({
+    example: '+2348012345678',
+    description: 'Phone number',
+  })
+  @IsString()
+  @IsOptional()
   phone?: string;
 
-  @ApiPropertyOptional({ example: true })
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Check if the partner is a company',
+    default: false,
+  })
+  @IsBoolean()
+  @IsOptional()
   is_company?: boolean;
 
   @ApiPropertyOptional({
     example: 1,
-    description: 'Set >0 to mark as customer',
+    description: 'Customer rank (set > 0 to mark as customer)',
   })
+  @IsNumber()
+  @IsOptional()
   customer_rank?: number;
 
-  @ApiPropertyOptional({ example: 0, description: 'Set >0 to mark as vendor' })
+  @ApiPropertyOptional({
+    example: 0,
+    description: 'Supplier rank (set > 0 to mark as vendor)',
+  })
+  @IsNumber()
+  @IsOptional()
   supplier_rank?: number;
 
-  @ApiPropertyOptional({ example: 233, description: 'res.country ID' })
+  @ApiPropertyOptional({
+    example: 233,
+    description: 'Country ID (res.country)',
+  })
+  @IsNumber()
+  @IsOptional()
   country_id?: number;
 }
 

@@ -90,34 +90,7 @@ export class UpdateRecordDto {
   values: Record<string, any>;
 }
 
-export class CreateInvoiceDto {
-  @ApiProperty({
-    example: {
-      move_type: 'out_invoice',
-      partner_id: 7,
-      invoice_date: '2025-07-28',
-      invoice_line_ids: [
-        [
-          0,
-          0,
-          {
-            name: 'Consulting Services',
-            quantity: 10,
-            price_unit: 150.0,
-          },
-        ],
-      ],
-    },
-    description: 'Invoice data',
-  })
-  values: {
-    move_type: 'out_invoice' | 'in_invoice' | 'out_refund' | 'in_refund';
-    partner_id: number;
-    invoice_date?: string;
-    payment_reference?: string;
-    invoice_line_ids: any[];
-  };
-}
+
 
 export class OdooModelDto {
   @ApiProperty({
