@@ -129,6 +129,12 @@ export class OdooService {
         kwargs,
       ]);
     } catch (error: any) {
+      // Odoo actions (action_post, button_cancel, etc.) return None,
+      // which XML-RPC can't serialize. This is a successful operation.
+      if (error.message?.includes('cannot marshal None')) {
+        this.logger.debug(`RPC [${model}.${method}]: action returned None (success)`);
+        return null;
+      }
       this.logger.error(`RPC Error [${model}.${method}]: ${error.message}`);
       throw new OdooException(
         OdooErrorCode.API_ERROR,
@@ -220,7 +226,21 @@ export class OdooService {
     const searchDomain = domain.map((d) =>
       typeof d === 'string' ? d : [d.field, d.operator, d.value],
     );
-    return this.executeKw(model, 'search_read', [searchDomain], options);
+    const sanitizedOptions = { ...options };
+    if (sanitizedOptions.limit != null) {
+      const n = Number(sanitizedOptions.limit);
+      sanitizedOptions.limit = Number.isFinite(n) ? n : undefined;
+    }
+    if (sanitizedOptions.offset != null) {
+      const n = Number(sanitizedOptions.offset);
+      sanitizedOptions.offset = Number.isFinite(n) ? n : 0;
+    }
+    return this.executeKw(
+      model,
+      'search_read',
+      [searchDomain],
+      sanitizedOptions,
+    );
   }
 
   /**

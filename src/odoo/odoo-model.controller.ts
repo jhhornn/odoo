@@ -12,10 +12,14 @@ import {
   ApiQuery,
   ApiResponse,
   ApiTags,
+  ApiSecurity,
 } from '@nestjs/swagger';
 import { OdooService } from './odoo.service';
+import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
 
 @ApiTags('Odoo Model Metadata')
+@ApiSecurity('X-API-Key')
+@ApiCommonErrorResponses()
 @Controller('odoo/models')
 export class OdooModelController {
   constructor(private readonly odooService: OdooService) {}

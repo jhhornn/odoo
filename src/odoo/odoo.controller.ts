@@ -17,6 +17,7 @@ import {
   ApiBody,
   ApiParam,
   ApiQuery,
+  ApiSecurity,
 } from '@nestjs/swagger';
 import { OdooService } from './odoo.service';
 import {
@@ -26,8 +27,11 @@ import {
   SearchDto,
 } from './dto';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
+import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
 
 @ApiTags('Odoo Generic')
+@ApiSecurity('X-API-Key')
+@ApiCommonErrorResponses()
 @Controller('odoo')
 export class OdooController {
   constructor(private readonly odooService: OdooService) {}
@@ -37,20 +41,20 @@ export class OdooController {
   @ApiOperation({ summary: 'Search records' })
   @ApiParam({ name: 'model', example: 'res.partner' })
   @ApiBody({ type: SearchDto })
-  @ApiStandardResponse({ status: 200, description: 'List of record IDs', type: [Number] })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'List of record IDs',
+    type: [Number],
+  })
   async search(
     @Param('model') model: string,
     @Body() searchDto: SearchDto,
   ): Promise<number[]> {
-    return this.odooService.search(
-      model,
-      searchDto.domain,
-      {
-        limit: searchDto.limit,
-        offset: searchDto.offset,
-        order: searchDto.order,
-      },
-    );
+    return this.odooService.search(model, searchDto.domain, {
+      limit: searchDto.limit,
+      offset: searchDto.offset,
+      order: searchDto.order,
+    });
   }
 
   @Post(':model/search_read')
@@ -63,16 +67,12 @@ export class OdooController {
     @Param('model') model: string,
     @Body() searchReadDto: SearchReadDto,
   ): Promise<any[]> {
-    return this.odooService.searchRead(
-      model,
-      searchReadDto.domain,
-      {
-        fields: searchReadDto.fields,
-        limit: searchReadDto.limit,
-        offset: searchReadDto.offset,
-        order: searchReadDto.order,
-      },
-    );
+    return this.odooService.searchRead(model, searchReadDto.domain, {
+      fields: searchReadDto.fields,
+      limit: searchReadDto.limit,
+      offset: searchReadDto.offset,
+      order: searchReadDto.order,
+    });
   }
 
   @Post(':model')
@@ -80,51 +80,16 @@ export class OdooController {
   @ApiOperation({ summary: 'Create a record' })
   @ApiParam({ name: 'model', example: 'res.partner' })
   @ApiBody({ type: CreateRecordDto })
-  @ApiStandardResponse({ status: 201, description: 'Created record ID', type: Number })
+  @ApiStandardResponse({
+    status: 201,
+    description: 'Created record ID',
+    type: Number,
+  })
   async create(
     @Param('model') model: string,
     @Body() createRecordDto: CreateRecordDto,
   ): Promise<number> {
     return this.odooService.create(model, createRecordDto.values);
-  }
-
-  @Get(':model/:id')
-  @ApiOperation({ summary: 'Read a record' })
-  @ApiParam({ name: 'model', example: 'res.partner' })
-  @ApiParam({ name: 'id', example: 1 })
-  @ApiStandardResponse({ status: 200, description: 'Record details' })
-  async read(
-    @Param('model') model: string,
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<any> {
-    const results = await this.odooService.read(model, [id]);
-    return results.length > 0 ? results[0] : null;
-  }
-
-  @Put(':model/:id')
-  @ApiOperation({ summary: 'Update a record' })
-  @ApiParam({ name: 'model', example: 'res.partner' })
-  @ApiParam({ name: 'id', example: 1 })
-  @ApiBody({ type: UpdateRecordDto })
-  @ApiStandardResponse({ status: 200, description: 'Record updated successfully', type: Boolean })
-  async write(
-    @Param('model') model: string,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateRecordDto: UpdateRecordDto,
-  ): Promise<boolean> {
-    return this.odooService.write(model, [id], updateRecordDto.values);
-  }
-
-  @Delete(':model/:id')
-  @ApiOperation({ summary: 'Delete a record' })
-  @ApiParam({ name: 'model', example: 'res.partner' })
-  @ApiParam({ name: 'id', example: 1 })
-  @ApiStandardResponse({ status: 200, description: 'Record deleted successfully', type: Boolean })
-  async unlink(
-    @Param('model') model: string,
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<boolean> {
-    return this.odooService.unlink(model, [id]);
   }
 
   @Get(':model/fields')
@@ -149,12 +114,63 @@ export class OdooController {
     return this.odooService.nameSearch(model, name || '', { limit });
   }
 
+  @Get(':model/:id')
+  @ApiOperation({ summary: 'Read a record' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiParam({ name: 'id', example: 1 })
+  @ApiStandardResponse({ status: 200, description: 'Record details' })
+  async read(
+    @Param('model') model: string,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<any> {
+    const results = await this.odooService.read(model, [id]);
+    return results.length > 0 ? results[0] : null;
+  }
+
+  @Put(':model/:id')
+  @ApiOperation({ summary: 'Update a record' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiParam({ name: 'id', example: 1 })
+  @ApiBody({ type: UpdateRecordDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Record updated successfully',
+    type: Boolean,
+  })
+  async write(
+    @Param('model') model: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateRecordDto: UpdateRecordDto,
+  ): Promise<boolean> {
+    return this.odooService.write(model, [id], updateRecordDto.values);
+  }
+
+  @Delete(':model/:id')
+  @ApiOperation({ summary: 'Delete a record' })
+  @ApiParam({ name: 'model', example: 'res.partner' })
+  @ApiParam({ name: 'id', example: 1 })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Record deleted successfully',
+    type: Boolean,
+  })
+  async unlink(
+    @Param('model') model: string,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<boolean> {
+    return this.odooService.unlink(model, [id]);
+  }
+
   @Post(':model/search-count')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Count records' })
   @ApiParam({ name: 'model', example: 'res.partner' })
   @ApiBody({ type: SearchDto })
-  @ApiStandardResponse({ status: 200, description: 'Count of records', type: Number })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Count of records',
+    type: Number,
+  })
   async searchCount(
     @Param('model') model: string,
     @Body() searchDto: SearchDto,

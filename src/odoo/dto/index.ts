@@ -90,8 +90,6 @@ export class UpdateRecordDto {
   values: Record<string, any>;
 }
 
-
-
 export class OdooModelDto {
   @ApiProperty({
     description: 'Technical model identifier used in Odoo',
