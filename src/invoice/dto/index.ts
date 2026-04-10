@@ -1,4 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsArray, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export * from './create-invoice.dto';
 export * from './update-invoice.dto';
@@ -38,18 +40,31 @@ export class InvoiceDto {
 
 export class FilterInvoiceDto {
   @ApiPropertyOptional({ example: 'out_invoice' })
+  @IsOptional()
+  @IsEnum(['out_invoice', 'in_invoice', 'out_refund', 'in_refund'])
   move_type?: 'out_invoice' | 'in_invoice' | 'out_refund' | 'in_refund';
 
   @ApiPropertyOptional({ example: 7 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   partner_id?: number;
 
   @ApiPropertyOptional({ example: '2025-07-28' })
+  @IsOptional()
+  @IsString()
   invoice_date?: string;
 
   @ApiPropertyOptional({ example: 50 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   limit?: number;
 
   @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   offset?: number;
 
   @ApiPropertyOptional({
@@ -58,5 +73,8 @@ export class FilterInvoiceDto {
     isArray: true,
     type: String,
   })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   fields?: string[];
 }

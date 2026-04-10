@@ -8,11 +8,15 @@ export class CreateInvoiceDto {
       move_type: 'out_invoice',
       partner_id: 7,
       invoice_line_ids: [
-        [0, 0, {
-          name: 'Product or Service',
-          quantity: 1,
-          price_unit: 100.00,
-        }],
+        [
+          0,
+          0,
+          {
+            name: 'Product or Service',
+            quantity: 1,
+            price_unit: 100.0,
+          },
+        ],
       ],
     },
   })
