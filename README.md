@@ -1,134 +1,104 @@
-# Odoo NestJS Integration
+# @nestjs-odoo/core
 
 Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC.
 
 ## Features
-- � **High Performance**: Optimized XML-RPC client
-- 🛡️ **Type Safe**: Fully typed DTOs and Responses
-- 🔌 **Easy Integration**: Plug-and-play module
-- 📝 **Beautiful Documentation**: Swagger UI included
-- 🧩 **Modular Design**: Extendable architecture
 
-## Installation
+- **High Performance** — Optimized XML-RPC client with connection pooling
+- **Type Safe** — Fully typed DTOs and responses
+- **Easy Integration** — Plug-and-play NestJS module
+- **Swagger Documentation** — Built-in Swagger UI when running as a server
+- **Modular Design** — Import only the modules you need
+- **Dual-Use** — Standalone API server or library in your own NestJS app
+
+---
+
+## Quick Start
+
+### As a Standalone Server
 
 ```bash
-npm install
+git clone <repository-url>
+cd odoo
+yarn install
+cp .env.example .env   # Configure your Odoo connection
+yarn start:dev          # http://localhost:3000
 ```
 
-## Running the Application
+### As a Library
 
 ```bash
-# development
-npm run start
-
-# watch mode
-npm run start:dev
-
-# production mode
-npm run start:prod
+yarn add @nestjs-odoo/core
 ```
-
-## API Documentation
-Start the application and visit:
-`http://localhost:3000/api`
-
-## Extensibility Guide
-
-This project is designed to be easily extensible. Here is how you can add support for a new Odoo module (e.g., **Accounting**).
-
-### 1. Create Module Structure
-Create a new directory `src/accounting` with the following structure:
-```
-src/accounting/
-├── dto/
-│   ├── index.ts
-│   ├── create-account.dto.ts
-│   └── update-account.dto.ts
-├── accounting.controller.ts
-├── accounting.module.ts
-└── accounting.service.ts
-```
-
-### 2. Create DTOs
-Define your Data Transfer Objects in `src/accounting/dto/`. Use `class-validator` and `@nestjs/swagger` decorators.
 
 ```typescript
-// src/accounting/dto/create-account.dto.ts
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber } from 'class-validator';
-
-export class CreateAccountDto {
-  @ApiProperty({ example: 'Bank' })
-  @IsString()
-  name: string;
-
-  @ApiProperty({ example: '101000' })
-  @IsString()
-  code: string;
-}
-```
-
-### 3. Implement Service
-Create `AccountingService` extending `BaseOdooService` (if available) or using `OdooService`.
-
-```typescript
-// src/accounting/accounting.service.ts
-import { Injectable } from '@nestjs/common';
-import { OdooService } from '../odoo/odoo.service';
-
-@Injectable()
-export class AccountingService {
-  constructor(private readonly odooService: OdooService) {}
-
-  async create(values: any) {
-    return this.odooService.create('account.account', values);
-  }
-}
-```
-
-### 4. Implement Controller
-Create `AccountingController` to expose endpoints.
-
-```typescript
-// src/accounting/accounting.controller.ts
-import { Controller, Post, Body } from '@nestjs/common';
-import { AccountingService } from './accounting.service';
-import { CreateAccountDto } from './dto';
-
-@Controller('accounting')
-export class AccountingController {
-  constructor(private readonly service: AccountingService) {}
-
-  @Post()
-  async create(@Body() dto: CreateAccountDto) {
-    return this.service.create(dto);
-  }
-}
-```
-
-### 5. Register Module
-Register your new module in `src/app.module.ts`.
-
-```typescript
-import { AccountingModule } from './accounting/accounting.module';
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { OdooModule, PartnerModule, ProductModule, InvoiceModule } from '@nestjs-odoo/core';
 
 @Module({
   imports: [
-    // ... other modules
-    AccountingModule,
+    ConfigModule.forRoot({ isGlobal: true }),
+    OdooModule,
+    PartnerModule,
+    ProductModule,
+    InvoiceModule,
   ],
 })
 export class AppModule {}
 ```
 
-### 6. Export (Optional)
-If you want this to be available in the npm package, export it in `src/index.ts`.
+See [Getting Started](docs/getting-started.md) for full setup including environment variables and authentication.
 
-```typescript
-export { AccountingModule } from './accounting/accounting.module';
-export { AccountingService } from './accounting/accounting.service';
-export * from './accounting/dto';
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [Getting Started](docs/getting-started.md) | Installation, configuration, environment variables, running the app |
+| [API Reference](docs/api-reference.md) | Complete endpoint reference — generic Odoo, partners, products, invoices, payments |
+| [Integration Guide](docs/integration-guide.md) | Sync workflows, webhooks, error handling, idempotency (for external system developers) |
+| [Extending & Library Usage](docs/extending.md) | Using as an NPM library, adding custom modules, exported API |
+
+---
+
+## Architecture
+
+```
+src/
+├── auth/        # API key authentication (env-backed, extensible)
+├── common/      # Shared services (webhook), decorators, interceptors
+├── odoo/        # Core Odoo XML-RPC client and generic CRUD
+├── partner/     # res.partner domain (customers, vendors, contacts)
+├── product/     # product.product domain (products, plans)
+├── invoice/     # account.move domain (invoices, bills)
+└── payment/     # account.payment domain (payment registration)
 ```
 
+---
+
+## Sync Workflow
+
+For external systems integrating with Odoo, the sync order is:
+
+```
+1. Partners     POST /partners        (customers & vendors)
+2. Products     POST /products        (plans & physical goods)
+3. Invoices     POST /invoices        (references partners + products)
+4. Payments     POST /payments        (references posted invoices)
+```
+
+All sync endpoints are idempotent — safe to retry on failure. See the [Integration Guide](docs/integration-guide.md) for details.
+
+---
+
+## Swagger UI
+
+Start the server and visit: **http://localhost:3000/api**
+
+---
+
 ## License
+
 MIT
