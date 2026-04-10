@@ -23,12 +23,16 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-org/nestjs-odoo.git"
+    "url": "git+https://github.com/octosoft-ai/nest-odoo-integration.git"
   },
   "bugs": {
-    "url": "https://github.com/your-org/nestjs-odoo/issues"
+    "url": "https://github.com/octosoft-ai/nest-odoo-integration/issues"
   },
-  "homepage": "https://github.com/your-org/nestjs-odoo#readme",
+  "homepage": "https://github.com/octosoft-ai/nest-odoo-integration#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "scripts": {
     "prebuild": "rimraf dist",
     "build": "tsc -p tsconfig.build.json",
