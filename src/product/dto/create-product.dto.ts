@@ -26,7 +26,8 @@ export class CreateProductDto {
   @ApiPropertyOptional({
     example: 'product',
     enum: ['product', 'consu', 'service'],
-    description: 'Product type (product=storable, consu=consumable, service=service)',
+    description:
+      'Product type (product=storable, consu=consumable, service=service)',
     default: 'product',
   })
   @IsEnum(['product', 'consu', 'service'])

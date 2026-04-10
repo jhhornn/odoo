@@ -18,32 +18,48 @@ import {
   ApiQuery,
   ApiParam,
   ApiBody,
+  ApiHeader,
+  ApiSecurity,
 } from '@nestjs/swagger';
 import { ProductService } from './product.service';
-import {
-  CreateProductDto,
-  UpdateProductDto,
-  FilterProductDto,
-  ProductDto,
-} from './dto';
+import { FilterProductDto, ProductDto } from './dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { UpsertProductDto } from './dto/upsert-product.dto';
 import { SearchDomain } from 'src/odoo/interfaces';
+import { GetApiKeyContext } from '../auth/decorators';
+import { ApiKeyContext } from '../auth/interfaces';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
+import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
 
 @ApiTags('Products')
+@ApiSecurity('X-API-Key')
+@ApiCommonErrorResponses()
 @Controller('products')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new product' })
-  @ApiBody({ type: CreateProductDto })
-  @ApiStandardResponse({
-    status: 201,
-    description: 'Product created',
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Create or update a Plan or Product',
+    description:
+      'Creates or updates a plan/product in Odoo. Checks for existence by external_ref (stored as default_code) before creating.',
   })
-  async create(@Body() dto: CreateProductDto): Promise<number> {
-    return this.productService.createProduct(dto);
+  @ApiHeader({
+    name: 'X-API-Key',
+    description: 'External system API key',
+    required: true,
+  })
+  @ApiBody({ type: UpsertProductDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Product created or updated successfully',
+  })
+  async create(
+    @Body() dto: UpsertProductDto,
+    @GetApiKeyContext() context: ApiKeyContext,
+  ) {
+    return this.productService.upsert(dto, context);
   }
 
   @Get()
@@ -73,34 +89,6 @@ export class ProductController {
       limit: filters.limit ? Number(filters.limit) : 50,
       offset: filters.offset ? Number(filters.offset) : 0,
     });
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Get a product by ID' })
-  @ApiParam({ name: 'id', example: 101 })
-  @ApiStandardResponse({ status: 200, description: 'Product details', type: ProductDto })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const product = await this.productService.findOne(id);
-    if (!product) {
-      throw new BadRequestException(`Product with ID ${id} not found`);
-    }
-    return product;
-  }
-
-  @Put(':id')
-  @ApiOperation({ summary: 'Update a product' })
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateProductDto,
-  ) {
-    return this.productService.updateProduct(id, dto);
-  }
-
-  @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete a product' })
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    await this.productService.deleteProduct(id);
   }
 
   @Get('available')
@@ -164,6 +152,54 @@ export class ProductController {
     return this.productService.findByCategory(categoryId, limit);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a product by ID' })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Product ID',
+    example: 101,
+  })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Product details',
+    type: ProductDto,
+  })
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    const product = await this.productService.findOne(id);
+    if (!product) {
+      throw new BadRequestException(`Product with ID ${id} not found`);
+    }
+    return product;
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update a product' })
+  @ApiParam({ name: 'id', type: Number, description: 'Product ID' })
+  @ApiBody({ type: UpdateProductDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Product updated successfully',
+  })
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateProductDto,
+  ) {
+    return this.productService.updateProduct(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a product' })
+  @ApiParam({ name: 'id', type: Number, description: 'Product ID' })
+  @ApiStandardResponse({
+    status: 204,
+    description: 'Product deleted successfully',
+  })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.productService.deleteProduct(id);
+  }
+
   @Put(':id/price')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update product price' })
@@ -177,7 +213,10 @@ export class ProductController {
       required: ['price'],
     },
   })
-  @ApiStandardResponse({ status: 200, description: 'Price updated successfully' })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Price updated successfully',
+  })
   async updatePrice(
     @Param('id', ParseIntPipe) id: number,
     @Body('price') price: number,

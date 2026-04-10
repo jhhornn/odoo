@@ -1,4 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export * from './create-product.dto';
 export * from './update-product.dto';
@@ -25,15 +27,25 @@ export class ProductDto {
 
 export class FilterProductDto {
   @ApiPropertyOptional({ example: 'CONS', description: 'Search by name/code' })
+  @IsString()
+  @IsOptional()
   name?: string;
 
   @ApiPropertyOptional({ example: 'CONS-001' })
+  @IsString()
+  @IsOptional()
   default_code?: string;
 
   @ApiPropertyOptional({ example: 50 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   limit?: number;
 
   @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   offset?: number;
 
   @ApiPropertyOptional({
@@ -42,5 +54,8 @@ export class FilterProductDto {
     isArray: true,
     type: String,
   })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   fields?: string[];
 }
