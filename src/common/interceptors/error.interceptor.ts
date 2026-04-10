@@ -41,7 +41,9 @@ export class ErrorsInterceptor implements NestInterceptor {
                 timestamp: new Date().toISOString(),
               };
 
-        return throwError(() => new HttpException(standardizedResponse, status));
+        return throwError(
+          () => new HttpException(standardizedResponse, status),
+        );
       }),
     );
   }

@@ -3,12 +3,15 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { Observable } from 'rxjs';
 
 @Injectable()
 export class RequestInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(RequestInterceptor.name);
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const { method, url, headers, query, body } = context
       .switchToHttp()
@@ -23,11 +26,7 @@ export class RequestInterceptor implements NestInterceptor {
     delete mHeaders.authorization;
     delete mBody.password;
 
-    console.log('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%');
-    console.log('URL -->', `${method} ${url}`);
-    console.log('headers -->', mHeaders);
-    console.log('body -->', mBody);
-    console.log('query -->', mQuery);
+    this.logger.debug(`${method} ${url}`);
 
     return next.handle();
   }

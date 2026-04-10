@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ErrorsInterceptor } from './common/interceptors/error.interceptor';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -7,8 +7,8 @@ import { setupSwagger } from './common/config/swagger.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
 
-  // Global validation
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -17,21 +17,17 @@ async function bootstrap() {
     }),
   );
 
-  // Global error handling
   app.useGlobalInterceptors(new ErrorsInterceptor());
   app.useGlobalInterceptors(new ResponseInterceptor());
-
-  // CORS
   app.enableCors();
-
-  // Swagger configuration
+  app.setGlobalPrefix('api/v1');
   setupSwagger(app);
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
 
-  console.log(`🚀 Server running on: http://localhost:${port}`);
-  console.log(`📚 API Documentation: http://localhost:${port}/api`);
+  logger.log(`Server running on: http://localhost:${port}/api/v1`);
+  logger.log(`API Documentation: http://localhost:${port}/doc`);
 }
 
 bootstrap();

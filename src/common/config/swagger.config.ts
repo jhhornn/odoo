@@ -16,19 +16,32 @@ Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC.
 - 🚀 **High Performance**: Optimized XML-RPC client
 - 🛡️ **Type Safe**: Fully typed DTOs and Responses
 - 🔌 **Easy Integration**: Plug-and-play module
+
+### External System Integration
+External systems authenticate via \`X-API-Key\` header. Each system has its own key mapped to a specific Odoo company.
       `,
     )
     .setVersion('1.0.0')
     .addBearerAuth()
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'X-API-Key',
+        in: 'header',
+        description: 'API key for external system sync',
+      },
+      'X-API-Key',
+    )
     .addTag('Odoo Generic', 'Dynamic operations for any Odoo model')
     .addTag('Partners', 'Customer and Vendor management')
     .addTag('Products', 'Product catalog management')
     .addTag('Invoices', 'Invoice and Payment management')
+    .addTag('Payments', 'Payment registration and management')
     .addTag('Odoo Model Metadata', 'Explore Odoo models and fields')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document, {
+  SwaggerModule.setup('doc', app, document, {
     swaggerOptions: {
       persistAuthorization: true,
       displayRequestDuration: true,
@@ -40,5 +53,4 @@ Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC.
     customSiteTitle: 'Odoo API Docs',
   });
 
-  console.log(`📚 API Documentation: http://localhost:${process.env.PORT || 3000}/api`);
 }
