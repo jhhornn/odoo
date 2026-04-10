@@ -10,7 +10,6 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
-  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -18,32 +17,51 @@ import {
   ApiQuery,
   ApiParam,
   ApiBody,
+  ApiHeader,
+  ApiSecurity,
 } from '@nestjs/swagger';
 import { PartnerService } from './partner.service';
 import { SearchDomain } from 'src/odoo/interfaces';
-import {
-  PartnerDto,
-  FilterPartnerDto,
-  CreatePartnerDto,
-  UpdatePartnerDto,
-} from './dto';
+import { PartnerDto, FilterPartnerDto, UpdatePartnerDto } from './dto';
+import { UpsertPartnerDto } from './dto/upsert-partner.dto';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
+import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
+import { GetApiKeyContext } from '../auth/decorators';
+import { ApiKeyContext } from '../auth/interfaces';
 
 /**
  * REST endpoints for Partner operations
  */
 @ApiTags('Partners')
+@ApiSecurity('X-API-Key')
+@ApiCommonErrorResponses()
 @Controller('partners')
 export class PartnerController {
   constructor(private readonly partnerService: PartnerService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new partner' })
-  @ApiBody({ type: CreatePartnerDto })
-  @ApiStandardResponse({ status: 201, description: 'Partner created successfully' })
-  async create(@Body() createPartnerDto: CreatePartnerDto) {
-    return this.partnerService.create(createPartnerDto);
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Create or update a Customer or Vendor',
+    description:
+      'Creates or updates a customer/vendor in Odoo. Checks for existence by external_ref before creating. ' +
+      'If the record exists, it updates basic fields (including active status).',
+  })
+  @ApiHeader({
+    name: 'X-API-Key',
+    description: 'External system API key',
+    required: true,
+  })
+  @ApiBody({ type: UpsertPartnerDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Partner created or updated successfully',
+  })
+  async create(
+    @Body() dto: UpsertPartnerDto,
+    @GetApiKeyContext() context: ApiKeyContext,
+  ) {
+    return this.partnerService.upsert(dto, context);
   }
 
   @Get()
@@ -109,17 +127,46 @@ export class PartnerController {
     return this.partnerService.findSuppliers(limit);
   }
 
+  @Get('vendors')
+  @ApiOperation({
+    summary: 'List all vendor partners',
+    description: 'Returns all partners with supplier_rank > 0. Alias for /suppliers.',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiStandardResponse({ status: 200, description: 'List of vendors' })
+  async getVendors(@Query('limit') limit?: number) {
+    return this.partnerService.findSuppliers(limit);
+  }
+
+  @Get('all')
+  @ApiOperation({
+    summary: 'List all customers and vendors',
+    description:
+      'Returns all partners that have customer_rank > 0 or supplier_rank > 0 (or both).',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiStandardResponse({ status: 200, description: 'List of all customers and vendors' })
+  async getAllContacts(@Query('limit') limit?: number) {
+    return this.partnerService.findAllContacts(limit);
+  }
+
   @Get('search')
   @ApiOperation({ summary: 'Search partners by name or email' })
   @ApiQuery({ name: 'q', required: true, description: 'Search query' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    type: Number,
+    description: 'Pagination offset',
+  })
   @ApiStandardResponse({ status: 200, description: 'Search results' })
   async searchPartners(
     @Query('q') query: string,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ) {
-    return this.partnerService.searchByNameOrEmail(query, limit);
+    return this.partnerService.searchByNameOrEmail(query, limit, offset);
   }
 
   @Get('country/:countryId')
@@ -137,10 +184,15 @@ export class PartnerController {
   @Get(':id')
   @ApiOperation({ summary: 'Get partner by ID' })
   @ApiParam({ name: 'id', type: Number, description: 'Partner ID' })
-  @ApiStandardResponse({ status: 200, description: 'Partner details', type: PartnerDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Partner details',
+    type: PartnerDto,
+  })
   async findOne(@Param('id', ParseIntPipe) id: number) {
     return this.partnerService.findOne(id, [
       'name',
+      'ref',
       'email',
       'phone',
       'mobile',
@@ -161,7 +213,10 @@ export class PartnerController {
   @ApiOperation({ summary: 'Update partner' })
   @ApiParam({ name: 'id', type: Number, description: 'Partner ID' })
   @ApiBody({ type: UpdatePartnerDto })
-  @ApiStandardResponse({ status: 200, description: 'Partner updated successfully' })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Partner updated successfully',
+  })
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updatePartnerDto: UpdatePartnerDto,
@@ -177,7 +232,10 @@ export class PartnerController {
     description: 'The ID of the partner to delete',
     example: 7,
   })
-  @ApiStandardResponse({ status: 204, description: 'Partner successfully deleted.' })
+  @ApiStandardResponse({
+    status: 204,
+    description: 'Partner successfully deleted.',
+  })
   async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     await this.partnerService.deletePartner(id);
   }

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class PartnerDto {
   @ApiProperty({ example: 7 })
@@ -99,30 +100,49 @@ export class FilterPartnerDto {
     example: 'azure',
     description: 'Substring match on name',
   })
+  @IsString()
+  @IsOptional()
   name?: string;
 
   @ApiPropertyOptional({ example: 'info@azure.com' })
+  @IsString()
+  @IsOptional()
   email?: string;
 
   @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
   is_company?: boolean;
 
   @ApiPropertyOptional({
     example: 1,
     description: 'Only customers (customer_rank > 0) if set to 1',
   })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   customer_rank_gt?: number;
 
   @ApiPropertyOptional({
     example: 0,
     description: 'Only vendors (supplier_rank > 0) if set to 1',
   })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   supplier_rank_gt?: number;
 
   @ApiPropertyOptional({ example: 50 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   limit?: number;
 
   @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   offset?: number;
 
   @ApiPropertyOptional({
@@ -131,5 +151,8 @@ export class FilterPartnerDto {
     isArray: true,
     type: String,
   })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   fields?: string[];
 }
