@@ -10,6 +10,9 @@ Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC.
 - **Swagger Documentation** — Built-in Swagger UI when running as a server
 - **Modular Design** — Import only the modules you need
 - **Dual-Use** — Standalone API server or library in your own NestJS app
+- **Database-Backed Auth** — API keys stored as SHA-256 hashes with prefix-based lookup
+- **Reliable Webhooks** — HMAC-signed, BullMQ-queued delivery with automatic retries
+- **Rate Limiting** — Sliding-window rate limiter per API key tier via Redis
 
 ---
 
@@ -67,8 +70,10 @@ See [Getting Started](docs/getting-started.md) for full setup including environm
 
 ```
 src/
-├── auth/        # API key authentication (env-backed, extensible)
-├── common/      # Shared services (webhook), decorators, interceptors
+├── auth/        # API key authentication (hashed), rate limiting
+├── common/      # Shared base service, decorators, interceptors, database (Prisma)
+├── redis/       # Redis module (caching, rate limiting, BullMQ)
+├── webhook/     # Webhook registry, HMAC-signed delivery via BullMQ
 ├── odoo/        # Core Odoo XML-RPC client and generic CRUD
 ├── partner/     # res.partner domain (customers, vendors, contacts)
 ├── product/     # product.product domain (products, plans)

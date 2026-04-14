@@ -22,15 +22,25 @@ For endpoint details and request/response schemas, see the [API Reference](api-r
 
 ## Authentication
 
-Every request must include the `X-API-Key` header:
+Every request must include an API key via the `Authorization` header (preferred) or `X-API-Key` header:
 
 ```
-X-API-Key: <your-api-key>
+Authorization: Bearer sk_live_...
 ```
 
-The API key identifies your external system and determines the Odoo company the data belongs to. Each external system gets its own key configured server-side.
+or:
 
-Missing or invalid keys return `401 Unauthorized`.
+```
+X-API-Key: sk_live_...
+```
+
+API keys are provisioned by the system administrator via `POST /admin/api-keys`. Each key is associated with a `systemName` (e.g. `octohealth`, `octodoc`) that identifies the calling application. Keys are stored as SHA-256 hashes — the plaintext is shown only at creation.
+
+Each key also has:
+- **Scopes** — permissions like `["read", "write"]`
+- **Rate limit tier** — controls requests-per-minute (default: 100/min)
+
+Missing or invalid keys return `401 Unauthorized`. Exceeding the rate limit returns `429 Too Many Requests` with a `Retry-After` header.
 
 ---
 
@@ -66,10 +76,10 @@ When a customer or vendor is created or updated in your system, push it to Odoo.
 
 **How it works:**
 
-1. The API checks if a partner with the given `external_ref` already exists in Odoo (matched by `ref` field, scoped to your company).
-2. **Not found** → creates the partner with the correct company and rank.
+1. The API checks if a partner with the given `external_ref` already exists in Odoo (matched by `ref` field).
+2. **Not found** → creates the partner with the correct rank.
 3. **Found** → updates basic fields (name, email, phone, address, active status).
-4. Sends a webhook notification if configured.
+4. Emits a webhook event (`partner.created` or `partner.updated`) to your registered endpoint.
 
 **Key points:**
 
@@ -102,10 +112,10 @@ When a plan or product is created or updated in your system, push it to Odoo.
 
 **How it works:**
 
-1. The API checks if a product with the given `external_ref` already exists in Odoo (matched by `default_code`, scoped to your company).
+1. The API checks if a product with the given `external_ref` already exists in Odoo (matched by `default_code`).
 2. **Not found** → creates the product.
 3. **Found** → updates basic fields (name, prices, type, active status).
-4. Sends a webhook notification if configured.
+4. Emits a webhook event (`product.created` or `product.updated`) to your registered endpoint.
 
 **Key points:**
 
@@ -144,7 +154,7 @@ When an invoice or vendor bill is created in your system, push it to Odoo.
    - **Found (draft)** → updates header fields only (dates, narration). Lines are not modified.
    - **Found (posted/cancelled)** → skips update, returns `action: "skipped"`.
 4. If `auto_post: true`, confirms the invoice after creation. Posting failure leaves it in draft with error details in the response.
-5. Sends a webhook notification if configured.
+5. Emits a webhook event (`invoice.created` or `invoice.updated`) to your registered endpoint.
 
 **Key points:**
 
@@ -215,7 +225,7 @@ When a payment is received against an invoice, push it to Odoo.
    - Customer invoice (`out_invoice`) → `inbound` payment, `customer`
    - Vendor bill (`in_invoice`) → `outbound` payment, `supplier`
 5. Creates and posts the payment.
-6. Sends a webhook notification if configured.
+6. Emits a webhook event (`payment.created` or `payment.exists`) to your registered endpoint.
 
 **Key points:**
 
@@ -239,28 +249,165 @@ When a payment is received against an invoice, push it to Odoo.
 
 ## Webhooks
 
-If a webhook URL is configured for your API key, the API POSTs a notification after every sync operation.
+Webhooks deliver real-time notifications to your application when sync operations complete. Each application registers its own webhook URL and receives **only events it triggered** — Octohealth's partner upsert notifies Octohealth's webhook, not Octodoc's.
 
-**Payload:**
+### Registration
+
+Register a webhook endpoint via `POST /admin/webhooks`:
 
 ```json
 {
-  "event": "partner.created",
-  "status": "success",
-  "model": "res.partner",
-  "externalRef": "EXT-CUST-001",
-  "odooId": 42,
-  "companyId": 1,
-  "data": { "odooId": 42, "created": true, "action": "created" },
-  "timestamp": "2026-04-08T12:00:00.000Z"
+  "serviceName": "octohealth",
+  "url": "https://octohealth.example.com/webhooks",
+  "eventTypes": ["partner.created", "partner.updated", "invoice.created", "payment.created"]
 }
 ```
 
-If a `webhookToken` is configured, it is sent as the `X-Webhook-Token` header for authenticity verification.
+The response includes a `signingSecret` — store it securely. It's shown **only once** and is needed to verify webhook signatures.
 
-Webhook delivery is fire-and-forget (10s timeout). A failed webhook does **not** roll back the Odoo operation.
+### Delivery
 
-**Event Types:**
+When an event occurs:
+
+1. The event is persisted in the database (for audit and replay)
+2. A BullMQ job is enqueued for each matching webhook registration
+3. The worker POSTs the payload to your URL with HMAC-SHA256 signature headers:
+
+```
+POST https://octohealth.example.com/webhooks
+Content-Type: application/json
+X-Webhook-Signature: t=1712764800000,v1=a1b2c3...
+X-Webhook-ID: <event-uuid>
+X-Webhook-Event: partner.created
+```
+
+**Payload:**
+
+Every webhook payload follows a common structure with extra fields per resource type:
+
+```json
+{
+  "model": "<odoo-model>",
+  "externalRef": "<your-external-ref>",
+  "<resource>Id": 42,
+  "created": true,
+  "action": "created"
+}
+```
+
+**Common fields (always present):**
+
+| Field | Type | Description |
+|---|---|---|
+| `model` | string | Odoo model name (e.g. `res.partner`, `account.move`) |
+| `externalRef` | string | The `external_ref` you provided in the upsert/create request |
+| `<resource>Id` | number | The Odoo record ID (`partnerId`, `productId`, `invoiceId`, or `paymentId`) |
+| `created` | boolean | `true` if a new record was created, `false` if an existing record was matched |
+| `action` | string | What happened — see per-resource table below |
+
+#### Partner events (`partner.created`, `partner.updated`)
+
+```json
+{
+  "model": "res.partner",
+  "externalRef": "EXT-CUST-001",
+  "partnerId": 42,
+  "created": true,
+  "action": "created"
+}
+```
+
+| `action` | Meaning |
+|---|---|
+| `created` | New partner created in Odoo |
+| `updated` | Existing partner matched by `external_ref` and updated |
+
+#### Product events (`product.created`, `product.updated`)
+
+```json
+{
+  "model": "product.product",
+  "externalRef": "PLAN-PRO-MONTHLY",
+  "productId": 17,
+  "created": false,
+  "action": "updated"
+}
+```
+
+| `action` | Meaning |
+|---|---|
+| `created` | New product created in Odoo |
+| `updated` | Existing product matched by `external_ref` and updated |
+
+#### Invoice events (`invoice.created`, `invoice.updated`)
+
+```json
+{
+  "model": "account.move",
+  "externalRef": "INV-2026-001",
+  "invoiceId": 103,
+  "created": true,
+  "action": "created"
+}
+```
+
+| `action` | Meaning | Extra fields |
+|---|---|---|
+| `created` | New invoice created in Odoo | `autoPostFailed?: boolean`, `autoPostError?: string` |
+| `updated` | Existing draft invoice updated | — |
+| `skipped` | Existing invoice was not in draft state, update skipped | `reason: string` |
+
+> **Note:** When `action` is `skipped`, the event type is still `invoice.updated` (since `created` is `false`), even though the invoice was not modified.
+
+#### Payment events (`payment.created`, `payment.exists`)
+
+```json
+{
+  "model": "account.payment",
+  "externalRef": "PAY-2026-001",
+  "paymentId": 88,
+  "created": true,
+  "action": "created",
+  "invoiceId": 103
+}
+```
+
+| `action` | Meaning | Extra fields |
+|---|---|---|
+| `created` | New payment registered in Odoo | `invoiceId: number`, optionally `postFailed?: boolean`, `postError?: string` |
+| `already_exists` | Duplicate `external_ref` — existing payment returned | — |
+
+### Verifying Signatures
+
+Verify the `X-Webhook-Signature` header to ensure the payload is authentic:
+
+```typescript
+const [tPart, vPart] = signatureHeader.split(',');
+const timestamp = tPart.slice(2);
+const receivedSig = vPart.slice(3);
+
+const message = `${timestamp}.${rawBody}`;
+const expected = crypto.createHmac('sha256', signingSecret).update(message).digest('hex');
+
+// Use timing-safe comparison
+const valid = crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(receivedSig, 'hex'));
+
+// Also reject if timestamp is older than 5 minutes (replay protection)
+```
+
+### Retry & Failure Handling
+
+- **Retry schedule:** 30s → 5m → 30m → 2h → 8h (5 retries after initial attempt)
+- **Auto-disable:** After 10 consecutive failures across events, the webhook registration is automatically deactivated
+- **429 handling:** If your endpoint returns `429`, the system respects the `Retry-After` header
+- **Dead letter:** After all retries are exhausted, the delivery is marked `dead_letter`
+- A failed webhook **never** rolls back the Odoo operation
+
+### Delivery Logs
+
+View delivery history via `GET /admin/webhooks/:id/deliveries`. Each attempt logs: status, HTTP response code, latency, response preview, and error message.
+
+### Event Types
 
 | Event | Trigger |
 |---|---|

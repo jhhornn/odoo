@@ -314,15 +314,25 @@ export * from './sale-order/sale-order.service';
 | `PartnerModule` | Module | Partner/Contact management |
 | `ProductModule` | Module | Product management |
 | `InvoiceModule` | Module | Invoice/Bill management |
+| `PaymentModule` | Module | Payment registration |
+| `AuthModule` | Module | API key authentication and rate limiting |
+| `WebhookModule` | Module | Webhook registry and delivery (global) |
+| `DatabaseModule` | Module | Prisma database service (global) |
+| `RedisModule` | Module | Redis connection (global) |
 | `OdooService` | Service | Low-level Odoo XML-RPC operations |
 | `BaseOdooService` | Service | Abstract base for custom model services |
 | `PartnerService` | Service | Partner CRUD + queries |
 | `ProductService` | Service | Product CRUD + inventory queries |
 | `InvoiceService` | Service | Invoice CRUD + workflow actions |
+| `PaymentService` | Service | Payment registration |
+| `ApiKeyService` | Service | API key create/list/revoke |
+| `WebhookEmitterService` | Service | Emit webhook events (scoped per application) |
+| `WebhookRegistryService` | Service | Webhook registration CRUD |
+| `DatabaseService` | Service | Prisma client wrapper |
 | `OdooConfigService` | Service | Odoo connection configuration |
 | `OdooServiceFactory` | Factory | Dynamic service creation for any model |
 | `XmlRpcClientFactory` | Factory | XML-RPC client creation |
 | `OdooException` | Exception | Typed Odoo errors |
 | `OdooErrorCode` | Enum | Error code constants |
-| All DTOs | Classes | `CreatePartnerDto`, `CreateProductDto`, `CreateInvoiceDto`, etc. |
-| All Interfaces | Types | `SearchDomain`, `SearchOptions`, `ReadOptions`, `IOdooClient`, etc. |
+| All DTOs | Classes | `UpsertPartnerDto`, `UpsertProductDto`, `UpsertInvoiceDto`, `CreatePaymentDto`, etc. |
+| All Interfaces | Types | `SearchDomain`, `SearchOptions`, `ReadOptions`, `IOdooClient`, `ApiKeyContext`, etc. |

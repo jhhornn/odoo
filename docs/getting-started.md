@@ -13,6 +13,7 @@ This guide covers installation, configuration, and running the Odoo NestJS integ
 - [Configuration](#configuration)
   - [Odoo Connection](#odoo-connection)
   - [Application](#application)
+  - [Database & Redis](#database--redis)
   - [API Key Authentication](#api-key-authentication)
 - [Running the Application](#running-the-application)
 - [Swagger UI](#swagger-ui)
@@ -21,10 +22,12 @@ This guide covers installation, configuration, and running the Odoo NestJS integ
 
 ## Prerequisites
 
-- **Node.js** ≥ 16
-- **npm** or **yarn**
+- **Node.js** ≥ 20.19
+- **yarn**
 - A running **Odoo** instance (v14+) with XML-RPC enabled
 - Odoo user credentials with appropriate API permissions
+- **PostgreSQL** (for API keys, webhook registrations, delivery logs)
+- **Redis** (for caching, rate limiting, and BullMQ job queue)
 
 ---
 
@@ -72,21 +75,34 @@ Create a `.env` file in the project root (or set environment variables directly)
 | `PORT` | No | `3000` | Server port |
 | `NODE_ENV` | No | `development` | Environment |
 
+### Database & Redis
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | **Yes** | — | PostgreSQL connection string |
+| `REDIS_URL` | No | `redis://localhost:6379` | Redis connection URL (caching, rate limiting, job queue) |
+
 ### API Key Authentication
 
-All routes are protected by API key authentication. Every request must include a valid `X-API-Key` header.
+All routes are protected by API key authentication. Every request must include a valid key via the `Authorization: Bearer <key>` header or the `X-API-Key` header.
 
-| Variable | Required | Description | Example |
-|---|---|---|---|
-| `SYNC_API_KEY` | **Yes** | API key for the `X-API-Key` header | `abc123secret` |
-| `SYNC_COMPANY_ID` | No | Odoo company ID to scope operations (default: `1`) | `1` |
-| `SYNC_SYSTEM_NAME` | No | Identifier for the calling system (default: `default`) | `billing-platform` |
-| `SYNC_WEBHOOK_URL` | No | URL for webhook callbacks on sync events | `https://ext.system/webhook` |
-| `SYNC_WEBHOOK_TOKEN` | No | Secret token sent with webhook callbacks | `whk_secret` |
+API keys are **stored in the database** (PostgreSQL via Prisma). Only a SHA-256 hash is persisted — the plaintext key is shown once at creation time.
 
-`SYNC_COMPANY_ID` scopes upsert operations to a specific Odoo company. In a multi-company Odoo setup, this ensures records belong to the correct company. For single-company setups, use `1`.
+**Managing API keys:**
 
-> **Extensibility:** Authentication is backed by the `IApiKeyProvider` interface. The default `EnvApiKeyProvider` reads from env vars. Implement `IApiKeyProvider` and swap the provider in `AuthModule` for multi-key or database-backed authentication.
+| Action | Method | Endpoint |
+|---|---|---|
+| Create a key | `POST` | `/admin/api-keys` |
+| List keys (metadata only) | `GET` | `/admin/api-keys` |
+| Revoke a key | `DELETE` | `/admin/api-keys/:id` |
+
+When creating a key, the response includes the plaintext key (`sk_live_...`). Store it securely — it cannot be retrieved again.
+
+**Rate Limiting:**
+
+Every API key has a `rateLimitTier` (default: `"default"` = 100 req/min). Rate limiting uses a sliding-window algorithm backed by Redis. When exceeded, the API returns `429 Too Many Requests` with a `Retry-After` header.
+
+> **Seeding:** Run `yarn prisma:seed` to create initial API keys for development. The plaintext keys are printed to the console.
 
 **Example `.env` file:**
 
@@ -96,8 +112,8 @@ ODOO_DATABASE=mycompany_prod
 ODOO_USERNAME=admin@mycompany.com
 ODOO_PASSWORD=my-api-key
 PORT=3000
-SYNC_API_KEY=my-secret-key
-SYNC_COMPANY_ID=1
+DATABASE_URL=postgresql://postgres:password@localhost:5432/odoo_sync?schema=public
+REDIS_URL=redis://localhost:6379
 ```
 
 ---
@@ -105,6 +121,12 @@ SYNC_COMPANY_ID=1
 ## Running the Application
 
 ```bash
+# Apply database migrations
+yarn prisma:migrate
+
+# Seed initial API keys (prints plaintext keys to console)
+yarn prisma:seed
+
 # Development (watch mode)
 yarn start:dev
 

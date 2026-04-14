@@ -1,10 +1,10 @@
 # API Reference
 
-Complete endpoint reference for the Odoo NestJS Sync API. All endpoints require the `X-API-Key` header.
+Complete endpoint reference for the Odoo NestJS Sync API. All endpoints require authentication via `Authorization: Bearer <key>` or `X-API-Key` header.
 
 ```
 Base URL: http://localhost:3000
-X-API-Key: your-api-key-here
+Authorization: Bearer sk_live_...
 Content-Type: application/json
 ```
 
@@ -19,6 +19,8 @@ Content-Type: application/json
 - [Products](#products)
 - [Invoices](#invoices)
 - [Payments](#payments)
+- [API Key Management](#api-key-management)
+- [Webhook Management](#webhook-management)
 - [Field Reference](#field-reference)
 
 ---
@@ -722,6 +724,149 @@ POST /payments
   }
 }
 ```
+
+---
+
+## API Key Management
+
+Administrative endpoints for managing API keys. Keys are stored as SHA-256 hashes — the plaintext is returned only at creation time.
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/admin/api-keys` | Create a new API key |
+| `GET` | `/admin/api-keys` | List all keys (metadata only, no secrets) |
+| `DELETE` | `/admin/api-keys/:id` | Revoke a key |
+
+### Create API Key
+
+```
+POST /admin/api-keys
+```
+
+```json
+{
+  "systemName": "octohealth",
+  "scopes": ["read", "write"],
+  "rateLimitTier": "default"
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "uuid-...",
+  "prefix": "sk_live_",
+  "systemName": "octohealth",
+  "key": "sk_live_abc123...xyz"
+}
+```
+
+> **Important:** The `key` field is shown **only once**. Store it securely. It cannot be retrieved again.
+
+### List API Keys
+
+```
+GET /admin/api-keys
+```
+
+Returns prefix, systemName, scopes, rateLimitTier, isActive, lastUsedAt — never the key hash.
+
+### Revoke API Key
+
+```
+DELETE /admin/api-keys/:id
+```
+
+Immediately revokes the key. The Redis cache is evicted so revocation propagates within seconds.
+
+---
+
+## Webhook Management
+
+Register webhook endpoints to receive event notifications. Each application registers its own webhook URL and receives only events triggered by its own API key.
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/admin/webhooks` | Register a new webhook |
+| `GET` | `/admin/webhooks` | List all registrations |
+| `GET` | `/admin/webhooks/:id` | Get a registration |
+| `PATCH` | `/admin/webhooks/:id` | Update URL, event types, or active status |
+| `POST` | `/admin/webhooks/:id/rotate-secret` | Rotate signing secret |
+| `DELETE` | `/admin/webhooks/:id` | Disable a registration |
+| `GET` | `/admin/webhooks/:id/deliveries` | Delivery history |
+
+### Register Webhook
+
+```
+POST /admin/webhooks
+```
+
+```json
+{
+  "serviceName": "octohealth",
+  "url": "https://octohealth.example.com/webhooks",
+  "eventTypes": ["partner.created", "partner.updated", "invoice.created", "payment.created"]
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "uuid-...",
+  "serviceName": "octohealth",
+  "url": "https://octohealth.example.com/webhooks",
+  "signingSecret": "a1b2c3d4...",
+  "eventTypes": ["partner.created", "partner.updated", "invoice.created", "payment.created"]
+}
+```
+
+> **Important:** The `signingSecret` is shown **only once**. Store it to verify incoming webhook signatures.
+
+### Webhook Delivery
+
+When an event occurs, the system:
+
+1. Persists a `WebhookEvent` record
+2. Enqueues a BullMQ job per matching registration (scoped to the `serviceName` that triggered the event)
+3. The delivery worker POSTs to the registered URL with HMAC-SHA256 signature
+
+**Delivery headers:**
+
+| Header | Description |
+|---|---|
+| `X-Webhook-Signature` | `t=<timestamp>,v1=<hmac-hex>` |
+| `X-Webhook-ID` | Event UUID |
+| `X-Webhook-Event` | Event type (e.g. `partner.created`) |
+| `Content-Type` | `application/json` |
+
+**Verifying signatures:**
+
+```typescript
+const message = `${timestamp}.${rawBody}`;
+const expected = crypto.createHmac('sha256', signingSecret).update(message).digest('hex');
+// Compare with the v1= value using timing-safe equality
+```
+
+**Retry schedule:** 30s → 5m → 30m → 2h → 8h (5 retries). After 10 consecutive failures, the registration is auto-disabled.
+
+### Event Types
+
+| Event | Trigger |
+|---|---|
+| `partner.created` | New partner created via upsert |
+| `partner.updated` | Existing partner updated via upsert |
+| `product.created` | New product created via upsert |
+| `product.updated` | Existing product updated via upsert |
+| `invoice.created` | New invoice created via upsert |
+| `invoice.updated` | Existing draft invoice updated via upsert |
+| `payment.created` | New payment registered |
+| `payment.exists` | Duplicate `external_ref` — existing record returned |
 
 ---
 
