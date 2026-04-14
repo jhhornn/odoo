@@ -1,1 +1,1 @@
-export * from './env-api-key.provider';
+export * from './api-key.provider';

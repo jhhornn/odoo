@@ -9,7 +9,7 @@ import { ApiKeyContext } from '../interfaces';
  * ```typescript
  * @Post()
  * async sync(@GetApiKeyContext() ctx: ApiKeyContext) {
- *   console.log(ctx.companyId, ctx.systemName);
+ *   console.log(ctx.systemName);
  * }
  * ```
  */
