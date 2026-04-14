@@ -75,13 +75,36 @@ export abstract class BaseOdooService {
   }
 
   /**
+   * Cached search and read — returns Redis-cached results when available.
+   * Use for read-heavy, infrequently-changing data.
+   *
+   * @param domain - Search criteria
+   * @param options - Query options
+   * @param ttl - Cache TTL in seconds (default 60)
+   */
+  async cachedSearchRead(
+    domain: SearchDomain[] = [],
+    options: SearchOptions & ReadOptions = {},
+    ttl?: number,
+  ): Promise<any[]> {
+    return this.odooService.cachedSearchRead(
+      this.modelName,
+      domain,
+      options,
+      ttl,
+    );
+  }
+
+  /**
    * Create a new record
    *
    * @param values - Field values
    * @returns ID of created record
    */
   async create(values: Record<string, any>): Promise<number> {
-    return this.odooService.create(this.modelName, values);
+    const id = await this.odooService.create(this.modelName, values);
+    await this.odooService.invalidateModelCache(this.modelName);
+    return id;
   }
 
   /**
@@ -92,7 +115,9 @@ export abstract class BaseOdooService {
    * @returns True if successful
    */
   async update(id: number, values: Record<string, any>): Promise<boolean> {
-    return this.odooService.write(this.modelName, [id], values);
+    const result = await this.odooService.write(this.modelName, [id], values);
+    await this.odooService.invalidateModelCache(this.modelName);
+    return result;
   }
 
   /**
@@ -102,7 +127,9 @@ export abstract class BaseOdooService {
    * @returns True if successful
    */
   async delete(id: number): Promise<boolean> {
-    return this.odooService.unlink(this.modelName, [id]);
+    const result = await this.odooService.unlink(this.modelName, [id]);
+    await this.odooService.invalidateModelCache(this.modelName);
+    return result;
   }
 
   /**

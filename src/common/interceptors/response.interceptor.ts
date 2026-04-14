@@ -11,7 +11,7 @@ import {
   ApiResponseMetaOptions,
   API_RESPONSE_META,
 } from '../decorators/response.decorators';
-import { ResponseMessage } from 'src/odoo/interfaces';
+import { ResponseMessage } from '../../odoo/interfaces';
 
 export interface Response<T> {
   data: T;

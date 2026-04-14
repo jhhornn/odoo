@@ -1,6 +1,6 @@
 import { SetMetadata } from '@nestjs/common';
-
-export const API_RESPONSE_META = 'api_response_metadata';
+import { API_RESPONSE_META } from '../constants';
+export { API_RESPONSE_META } from '../constants';
 
 export interface ApiResponseMetaOptions {
   message?: string;
