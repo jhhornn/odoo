@@ -1,13 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BaseOdooService } from '../common/services/base.service';
 import { OdooService } from '../odoo/odoo.service';
-import { WebhookService } from '../common/services/webhook.service';
+import { WebhookEmitterService } from '../webhook/services/webhook-emitter.service';
 import {
   OdooException,
   OdooErrorCode,
 } from '../odoo/infrastructure/exceptions/odoo.exception';
 import { UpsertPartnerDto } from './dto/upsert-partner.dto';
 import { ApiKeyContext } from '../auth/interfaces';
+import {
+  errRecordNotFound,
+  ACTION_CREATED,
+  ACTION_UPDATED,
+  ACTION_ALREADY_ARCHIVED,
+  ACTION_ALREADY_ACTIVE,
+} from '../common/constants';
 
 /**
  * Service for Partner (res.partner) operations
@@ -19,7 +26,7 @@ export class PartnerService extends BaseOdooService {
 
   constructor(
     odooService: OdooService,
-    private readonly webhookService: WebhookService,
+    private readonly webhookEmitter: WebhookEmitterService,
   ) {
     super(odooService, 'res.partner');
   }
@@ -28,10 +35,18 @@ export class PartnerService extends BaseOdooService {
    * Find all company partners
    */
   async findCompanies(limit = 50) {
-    return this.searchRead(
+    return this.cachedSearchRead(
       [{ field: 'is_company', operator: '=', value: true }],
       {
-        fields: ['name', 'ref', 'email', 'phone', 'website', 'country_id', 'vat'],
+        fields: [
+          'name',
+          'ref',
+          'email',
+          'phone',
+          'website',
+          'country_id',
+          'vat',
+        ],
         limit,
         order: 'name asc',
       },
@@ -42,10 +57,17 @@ export class PartnerService extends BaseOdooService {
    * Find all customer partners
    */
   async findCustomers(limit = 50) {
-    return this.searchRead(
+    return this.cachedSearchRead(
       [{ field: 'customer_rank', operator: '>', value: 0 }],
       {
-        fields: ['name', 'ref', 'email', 'phone', 'customer_rank', 'country_id'],
+        fields: [
+          'name',
+          'ref',
+          'email',
+          'phone',
+          'customer_rank',
+          'country_id',
+        ],
         limit,
         order: 'customer_rank desc',
       },
@@ -56,10 +78,17 @@ export class PartnerService extends BaseOdooService {
    * Find all supplier partners
    */
   async findSuppliers(limit = 50) {
-    return this.searchRead(
+    return this.cachedSearchRead(
       [{ field: 'supplier_rank', operator: '>', value: 0 }],
       {
-        fields: ['name', 'ref', 'email', 'phone', 'supplier_rank', 'country_id'],
+        fields: [
+          'name',
+          'ref',
+          'email',
+          'phone',
+          'supplier_rank',
+          'country_id',
+        ],
         limit,
         order: 'supplier_rank desc',
       },
@@ -70,14 +99,22 @@ export class PartnerService extends BaseOdooService {
    * Find all partners that are either customers or vendors (or both)
    */
   async findAllContacts(limit = 50) {
-    return this.searchRead(
+    return this.cachedSearchRead(
       [
         '|',
         { field: 'customer_rank', operator: '>', value: 0 },
         { field: 'supplier_rank', operator: '>', value: 0 },
       ],
       {
-        fields: ['name', 'ref', 'email', 'phone', 'customer_rank', 'supplier_rank', 'country_id'],
+        fields: [
+          'name',
+          'ref',
+          'email',
+          'phone',
+          'customer_rank',
+          'supplier_rank',
+          'country_id',
+        ],
         limit,
         order: 'name asc',
       },
@@ -136,7 +173,7 @@ export class PartnerService extends BaseOdooService {
     if (!partner) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Partner ID ${partnerId} not found`,
+        errRecordNotFound('Partner', partnerId),
       );
     }
     return this.update(partnerId, data);
@@ -150,7 +187,7 @@ export class PartnerService extends BaseOdooService {
     if (!partner) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Partner ID ${partnerId} not found`,
+        errRecordNotFound('Partner', partnerId),
       );
     }
     return this.delete(partnerId);
@@ -164,11 +201,11 @@ export class PartnerService extends BaseOdooService {
     if (!partner) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Partner ID ${partnerId} not found`,
+        errRecordNotFound('Partner', partnerId),
       );
     }
     if (!partner.active) {
-      return { id: partnerId, action: 'already_archived' };
+      return { id: partnerId, action: ACTION_ALREADY_ARCHIVED };
     }
     return this.update(partnerId, { active: false });
   }
@@ -181,11 +218,11 @@ export class PartnerService extends BaseOdooService {
     if (!partner) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Partner ID ${partnerId} not found`,
+        errRecordNotFound('Partner', partnerId),
       );
     }
     if (partner.active) {
-      return { id: partnerId, action: 'already_active' };
+      return { id: partnerId, action: ACTION_ALREADY_ACTIVE };
     }
     return this.update(partnerId, { active: true });
   }
@@ -195,29 +232,24 @@ export class PartnerService extends BaseOdooService {
    * Checks existence by external_ref (Odoo `ref` field), creates or updates accordingly.
    */
   async upsert(dto: UpsertPartnerDto, context: ApiKeyContext) {
-    const result = await this.executeUpsert(dto, context);
-    await this.webhookService.notify(context, {
-      event: result.created ? 'partner.created' : 'partner.updated',
-      status: 'success',
-      model: 'res.partner',
-      externalRef: dto.external_ref,
-      partnerId: result.partnerId,
-      data: result,
-    });
+    const result = await this.executeUpsert(dto);
+    await this.webhookEmitter.emit(
+      context.systemName,
+      result.created ? 'partner.created' : 'partner.updated',
+      {
+        model: 'res.partner',
+        externalRef: dto.external_ref,
+        partnerId: result.partnerId,
+        ...result,
+      },
+    );
     return result;
   }
 
-  private async executeUpsert(dto: UpsertPartnerDto, context: ApiKeyContext) {
+  private async executeUpsert(dto: UpsertPartnerDto) {
     const domain: any[] = [
       { field: 'ref', operator: '=', value: dto.external_ref },
     ];
-    if (context.companyId) {
-      domain.push({
-        field: 'company_id',
-        operator: 'in',
-        value: [context.companyId, false],
-      });
-    }
     const existing = await this.odooService.searchRead('res.partner', domain, {
       fields: ['id', 'name', 'ref'],
       limit: 1,
@@ -228,17 +260,18 @@ export class PartnerService extends BaseOdooService {
     if (existing && existing.length > 0) {
       const partnerId = existing[0].id;
       await this.odooService.write('res.partner', [partnerId], values);
+      await this.odooService.invalidateModelCache('res.partner');
       this.logger.log(`Updated partner ${dto.external_ref} (ID: ${partnerId})`);
-      return { partnerId: partnerId, created: false, action: 'updated' };
+      return { partnerId: partnerId, created: false, action: ACTION_UPDATED };
     }
 
     const newId = await this.odooService.create('res.partner', {
       ...values,
       ref: dto.external_ref,
-      company_id: context.companyId || false,
     });
+    await this.odooService.invalidateModelCache('res.partner');
     this.logger.log(`Created partner ${dto.external_ref} (ID: ${newId})`);
-    return { partnerId: newId, created: true, action: 'created' };
+    return { partnerId: newId, created: true, action: ACTION_CREATED };
   }
 
   private buildUpsertValues(dto: UpsertPartnerDto): Record<string, any> {

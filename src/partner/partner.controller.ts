@@ -21,7 +21,7 @@ import {
   ApiSecurity,
 } from '@nestjs/swagger';
 import { PartnerService } from './partner.service';
-import { SearchDomain } from 'src/odoo/interfaces';
+import { SearchDomain } from '../odoo/interfaces';
 import { PartnerDto, FilterPartnerDto, UpdatePartnerDto } from './dto';
 import { UpsertPartnerDto } from './dto/upsert-partner.dto';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
@@ -130,7 +130,8 @@ export class PartnerController {
   @Get('vendors')
   @ApiOperation({
     summary: 'List all vendor partners',
-    description: 'Returns all partners with supplier_rank > 0. Alias for /suppliers.',
+    description:
+      'Returns all partners with supplier_rank > 0. Alias for /suppliers.',
   })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiStandardResponse({ status: 200, description: 'List of vendors' })
@@ -145,7 +146,10 @@ export class PartnerController {
       'Returns all partners that have customer_rank > 0 or supplier_rank > 0 (or both).',
   })
   @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiStandardResponse({ status: 200, description: 'List of all customers and vendors' })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'List of all customers and vendors',
+  })
   async getAllContacts(@Query('limit') limit?: number) {
     return this.partnerService.findAllContacts(limit);
   }

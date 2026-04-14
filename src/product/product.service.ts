@@ -1,13 +1,21 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { BaseOdooService } from '../common/services/base.service';
 import { OdooService } from '../odoo/odoo.service';
-import { WebhookService } from '../common/services/webhook.service';
+import { WebhookEmitterService } from '../webhook/services/webhook-emitter.service';
 import {
   OdooException,
   OdooErrorCode,
 } from '../odoo/infrastructure/exceptions/odoo.exception';
 import { UpsertProductDto } from './dto/upsert-product.dto';
 import { ApiKeyContext } from '../auth/interfaces';
+import {
+  errRecordNotFound,
+  ERR_PRICE_CANNOT_BE_NEGATIVE,
+  ACTION_CREATED,
+  ACTION_UPDATED,
+  ACTION_ALREADY_ARCHIVED,
+  ACTION_ALREADY_ACTIVE,
+} from '../common/constants';
 
 /**
  * Service for Product (product.product) operations
@@ -18,7 +26,7 @@ export class ProductService extends BaseOdooService {
 
   constructor(
     odooService: OdooService,
-    private readonly webhookService: WebhookService,
+    private readonly webhookEmitter: WebhookEmitterService,
   ) {
     super(odooService, 'product.product');
   }
@@ -27,7 +35,7 @@ export class ProductService extends BaseOdooService {
    * Find products available for sale
    */
   async findAvailableProducts(limit = 100) {
-    return this.searchRead(
+    return this.cachedSearchRead(
       [
         { field: 'sale_ok', operator: '=', value: true },
         { field: 'active', operator: '=', value: true },
@@ -51,7 +59,7 @@ export class ProductService extends BaseOdooService {
    * Find products in stock
    */
   async findInStock(limit = 100) {
-    return this.searchRead(
+    return this.cachedSearchRead(
       [{ field: 'qty_available', operator: '>', value: 0 }],
       {
         fields: [
@@ -71,7 +79,7 @@ export class ProductService extends BaseOdooService {
    * Find products by category
    */
   async findByCategory(categoryId: number, limit = 100) {
-    return this.searchRead(
+    return this.cachedSearchRead(
       [{ field: 'categ_id', operator: '=', value: categoryId }],
       {
         fields: ['name', 'default_code', 'list_price', 'qty_available'],
@@ -126,13 +134,13 @@ export class ProductService extends BaseOdooService {
    */
   async updatePrice(productId: number, newPrice: number) {
     if (newPrice < 0) {
-      throw new BadRequestException('Price cannot be negative');
+      throw new BadRequestException(ERR_PRICE_CANNOT_BE_NEGATIVE);
     }
     const product = await this.findOne(productId, ['id', 'name']);
     if (!product) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Product ID ${productId} not found`,
+        errRecordNotFound('Product', productId),
       );
     }
     return this.update(productId, { list_price: newPrice });
@@ -166,7 +174,7 @@ export class ProductService extends BaseOdooService {
     if (!product) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Product ID ${productId} not found`,
+        errRecordNotFound('Product', productId),
       );
     }
     return this.update(productId, data);
@@ -180,7 +188,7 @@ export class ProductService extends BaseOdooService {
     if (!product) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Product ID ${productId} not found`,
+        errRecordNotFound('Product', productId),
       );
     }
     return this.delete(productId);
@@ -194,11 +202,11 @@ export class ProductService extends BaseOdooService {
     if (!product) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Product ID ${productId} not found`,
+        errRecordNotFound('Product', productId),
       );
     }
     if (!product.active) {
-      return { id: productId, action: 'already_archived' };
+      return { id: productId, action: ACTION_ALREADY_ARCHIVED };
     }
     return this.update(productId, { active: false });
   }
@@ -211,11 +219,11 @@ export class ProductService extends BaseOdooService {
     if (!product) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Product ID ${productId} not found`,
+        errRecordNotFound('Product', productId),
       );
     }
     if (product.active) {
-      return { id: productId, action: 'already_active' };
+      return { id: productId, action: ACTION_ALREADY_ACTIVE };
     }
     return this.update(productId, { active: true });
   }
@@ -223,7 +231,7 @@ export class ProductService extends BaseOdooService {
   /**
    * Update product stock quantity
    */
-  async updateStock(productId: number, quantity: number, locationId?: number) {
+  async updateStock(productId: number, quantity: number) {
     // This typically requires creating a stock.quant record
     // Simplified version - in real scenario you'd use inventory adjustment
     return this.executeKw('write', [[productId]], { qty_available: quantity });
@@ -234,29 +242,24 @@ export class ProductService extends BaseOdooService {
    * Checks existence by external_ref (Odoo `default_code` field), creates or updates accordingly.
    */
   async upsert(dto: UpsertProductDto, context: ApiKeyContext) {
-    const result = await this.executeUpsert(dto, context);
-    await this.webhookService.notify(context, {
-      event: result.created ? 'product.created' : 'product.updated',
-      status: 'success',
-      model: 'product.product',
-      externalRef: dto.external_ref,
-      productId: result.productId,
-      data: result,
-    });
+    const result = await this.executeUpsert(dto);
+    await this.webhookEmitter.emit(
+      context.systemName,
+      result.created ? 'product.created' : 'product.updated',
+      {
+        model: 'product.product',
+        externalRef: dto.external_ref,
+        productId: result.productId,
+        ...result,
+      },
+    );
     return result;
   }
 
-  private async executeUpsert(dto: UpsertProductDto, context: ApiKeyContext) {
+  private async executeUpsert(dto: UpsertProductDto) {
     const domain: any[] = [
       { field: 'default_code', operator: '=', value: dto.external_ref },
     ];
-    if (context.companyId) {
-      domain.push({
-        field: 'company_id',
-        operator: 'in',
-        value: [context.companyId, false],
-      });
-    }
     const existing = await this.odooService.searchRead(
       'product.product',
       domain,
@@ -271,17 +274,18 @@ export class ProductService extends BaseOdooService {
     if (existing && existing.length > 0) {
       const productId = existing[0].id;
       await this.odooService.write('product.product', [productId], values);
+      await this.odooService.invalidateModelCache('product.product');
       this.logger.log(`Updated product ${dto.external_ref} (ID: ${productId})`);
-      return { productId: productId, created: false, action: 'updated' };
+      return { productId: productId, created: false, action: ACTION_UPDATED };
     }
 
     const newId = await this.odooService.create('product.product', {
       ...values,
       default_code: dto.external_ref,
-      company_id: context.companyId || false,
     });
+    await this.odooService.invalidateModelCache('product.product');
     this.logger.log(`Created product ${dto.external_ref} (ID: ${newId})`);
-    return { productId: newId, created: true, action: 'created' };
+    return { productId: newId, created: true, action: ACTION_CREATED };
   }
 
   private buildUpsertValues(dto: UpsertProductDto): Record<string, any> {

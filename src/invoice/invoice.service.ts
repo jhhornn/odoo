@@ -1,13 +1,24 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { BaseOdooService } from '../common/services/base.service';
 import { OdooService } from '../odoo/odoo.service';
-import { WebhookService } from '../common/services/webhook.service';
+import { WebhookEmitterService } from '../webhook/services/webhook-emitter.service';
 import { ApiKeyContext } from '../auth/interfaces';
 import {
   OdooException,
   OdooErrorCode,
 } from '../odoo/infrastructure/exceptions/odoo.exception';
 import { UpsertInvoiceDto } from './dto/upsert-invoice.dto';
+import {
+  errRecordNotFound,
+  errInvoiceStateBlocked,
+  errPartnerRefNotFound,
+  errProductRefNotFound,
+  errCurrencyNotFound,
+  ERR_PARTNER_OR_REF_REQUIRED,
+  ACTION_CREATED,
+  ACTION_UPDATED,
+  ACTION_SKIPPED,
+} from '../common/constants';
 
 /**
  * Service for Invoice (account.move) operations
@@ -18,7 +29,7 @@ export class InvoiceService extends BaseOdooService {
 
   constructor(
     odooService: OdooService,
-    private readonly webhookService: WebhookService,
+    private readonly webhookEmitter: WebhookEmitterService,
   ) {
     super(odooService, 'account.move');
   }
@@ -112,7 +123,14 @@ export class InvoiceService extends BaseOdooService {
     return this.searchRead(
       [{ field: 'move_type', operator: '=', value: 'in_invoice' }],
       {
-        fields: ['name', 'ref', 'partner_id', 'invoice_date', 'amount_total', 'state'],
+        fields: [
+          'name',
+          'ref',
+          'partner_id',
+          'invoice_date',
+          'amount_total',
+          'state',
+        ],
         limit,
         order: 'invoice_date desc',
       },
@@ -127,13 +145,18 @@ export class InvoiceService extends BaseOdooService {
     if (!invoice) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Invoice ID ${invoiceId} not found`,
+        errRecordNotFound('Invoice', invoiceId),
       );
     }
     if (invoice.state !== 'draft') {
       throw new OdooException(
         OdooErrorCode.VALIDATION_ERROR,
-        `Cannot confirm invoice '${invoice.name}' in '${invoice.state}' state. Only draft invoices can be confirmed.`,
+        errInvoiceStateBlocked(
+          'confirm',
+          invoice.name,
+          invoice.state,
+          'Only draft invoices can be confirmed.',
+        ),
       );
     }
     return this.executeKw('action_post', [[invoiceId]]);
@@ -199,13 +222,18 @@ export class InvoiceService extends BaseOdooService {
     if (!invoice) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Invoice ID ${invoiceId} not found`,
+        errRecordNotFound('Invoice', invoiceId),
       );
     }
     if (invoice.state !== 'draft') {
       throw new OdooException(
         OdooErrorCode.VALIDATION_ERROR,
-        `Cannot update invoice '${invoice.name}' in '${invoice.state}' state. Only draft invoices can be updated. Reset to draft first.`,
+        errInvoiceStateBlocked(
+          'update',
+          invoice.name,
+          invoice.state,
+          'Only draft invoices can be updated. Reset to draft first.',
+        ),
       );
     }
     return this.update(invoiceId, data);
@@ -219,13 +247,18 @@ export class InvoiceService extends BaseOdooService {
     if (!invoice) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Invoice ID ${invoiceId} not found`,
+        errRecordNotFound('Invoice', invoiceId),
       );
     }
     if (invoice.state !== 'draft') {
       throw new OdooException(
         OdooErrorCode.VALIDATION_ERROR,
-        `Cannot delete invoice '${invoice.name}' in '${invoice.state}' state. Only draft invoices can be deleted. Cancel it first or reset to draft.`,
+        errInvoiceStateBlocked(
+          'delete',
+          invoice.name,
+          invoice.state,
+          'Only draft invoices can be deleted. Cancel it first or reset to draft.',
+        ),
       );
     }
     return this.delete(invoiceId);
@@ -239,13 +272,18 @@ export class InvoiceService extends BaseOdooService {
     if (!invoice) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Invoice ID ${invoiceId} not found`,
+        errRecordNotFound('Invoice', invoiceId),
       );
     }
     if (invoice.state !== 'posted') {
       throw new OdooException(
         OdooErrorCode.VALIDATION_ERROR,
-        `Cannot cancel invoice '${invoice.name}' in '${invoice.state}' state. Only posted invoices can be cancelled.`,
+        errInvoiceStateBlocked(
+          'cancel',
+          invoice.name,
+          invoice.state,
+          'Only posted invoices can be cancelled.',
+        ),
       );
     }
     return this.executeKw('button_cancel', [[invoiceId]]);
@@ -259,13 +297,18 @@ export class InvoiceService extends BaseOdooService {
     if (!invoice) {
       throw new OdooException(
         OdooErrorCode.RECORD_NOT_FOUND,
-        `Invoice ID ${invoiceId} not found`,
+        errRecordNotFound('Invoice', invoiceId),
       );
     }
     if (invoice.state !== 'cancel') {
       throw new OdooException(
         OdooErrorCode.VALIDATION_ERROR,
-        `Cannot reset invoice '${invoice.name}' to draft from '${invoice.state}' state. Only cancelled invoices can be reset to draft.`,
+        errInvoiceStateBlocked(
+          'reset',
+          invoice.name,
+          invoice.state,
+          'Only cancelled invoices can be reset to draft.',
+        ),
       );
     }
     return this.executeKw('button_draft', [[invoiceId]]);
@@ -276,31 +319,26 @@ export class InvoiceService extends BaseOdooService {
    * Checks existence by external_ref (Odoo `ref` field), creates or updates (draft only).
    */
   async upsert(dto: UpsertInvoiceDto, context: ApiKeyContext) {
-    const result = await this.executeUpsert(dto, context);
-    await this.webhookService.notify(context, {
-      event: result.created ? 'invoice.created' : 'invoice.updated',
-      status: 'success',
-      model: 'account.move',
-      externalRef: dto.external_ref,
-      invoiceId: result.invoiceId,
-      data: result,
-    });
+    const result = await this.executeUpsert(dto);
+    await this.webhookEmitter.emit(
+      context.systemName,
+      result.created ? 'invoice.created' : 'invoice.updated',
+      {
+        model: 'account.move',
+        externalRef: dto.external_ref,
+        invoiceId: result.invoiceId,
+        ...result,
+      },
+    );
     return result;
   }
 
-  private async executeUpsert(dto: UpsertInvoiceDto, context: ApiKeyContext) {
-    const partnerId = await this.resolvePartnerId(dto, context);
+  private async executeUpsert(dto: UpsertInvoiceDto) {
+    const partnerId = await this.resolvePartnerId(dto);
 
     const invoiceDomain: any[] = [
       { field: 'ref', operator: '=', value: dto.external_ref },
     ];
-    if (context.companyId) {
-      invoiceDomain.push({
-        field: 'company_id',
-        operator: '=',
-        value: context.companyId,
-      });
-    }
     const existing = await this.odooService.searchRead(
       'account.move',
       invoiceDomain,
@@ -319,7 +357,7 @@ export class InvoiceService extends BaseOdooService {
         return {
           invoiceId: invoiceId,
           created: false,
-          action: 'skipped',
+          action: ACTION_SKIPPED,
           reason: `Invoice is in '${existing[0].state}' state`,
         };
       }
@@ -331,15 +369,14 @@ export class InvoiceService extends BaseOdooService {
       if (dto.extra_fields) Object.assign(values, dto.extra_fields);
       await this.odooService.write('account.move', [invoiceId], values);
       this.logger.log(`Updated invoice ${dto.external_ref} (ID: ${invoiceId})`);
-      return { invoiceId: invoiceId, created: false, action: 'updated' };
+      return { invoiceId: invoiceId, created: false, action: ACTION_UPDATED };
     }
 
-    const invoiceLines = await this.buildUpsertLines(dto, context);
+    const invoiceLines = await this.buildUpsertLines(dto);
     const values: Record<string, any> = {
       move_type: dto.move_type,
       partner_id: partnerId,
       ref: dto.external_ref,
-      company_id: context.companyId || false,
       invoice_line_ids: invoiceLines,
     };
     if (dto.invoice_date) values.invoice_date = dto.invoice_date;
@@ -384,7 +421,7 @@ export class InvoiceService extends BaseOdooService {
     const result: Record<string, any> = {
       invoiceId: newId,
       created: true,
-      action: 'created',
+      action: ACTION_CREATED,
     };
     if (autoPostError) {
       result.autoPostFailed = true;
@@ -393,22 +430,12 @@ export class InvoiceService extends BaseOdooService {
     return result;
   }
 
-  private async resolvePartnerId(
-    dto: UpsertInvoiceDto,
-    context: ApiKeyContext,
-  ): Promise<number> {
+  private async resolvePartnerId(dto: UpsertInvoiceDto): Promise<number> {
     if (dto.partner_id) return dto.partner_id;
     if (dto.partner_external_ref) {
       const partnerDomain: any[] = [
         { field: 'ref', operator: '=', value: dto.partner_external_ref },
       ];
-      if (context.companyId) {
-        partnerDomain.push({
-          field: 'company_id',
-          operator: 'in',
-          value: [context.companyId, false],
-        });
-      }
       const partners = await this.odooService.searchRead(
         'res.partner',
         partnerDomain,
@@ -419,18 +446,13 @@ export class InvoiceService extends BaseOdooService {
       );
       if (partners && partners.length > 0) return partners[0].id;
       throw new BadRequestException(
-        `Partner with external ref '${dto.partner_external_ref}' not found`,
+        errPartnerRefNotFound(dto.partner_external_ref),
       );
     }
-    throw new BadRequestException(
-      'Either partner_id or partner_external_ref must be provided',
-    );
+    throw new BadRequestException(ERR_PARTNER_OR_REF_REQUIRED);
   }
 
-  private async buildUpsertLines(
-    dto: UpsertInvoiceDto,
-    context: ApiKeyContext,
-  ): Promise<any[]> {
+  private async buildUpsertLines(dto: UpsertInvoiceDto): Promise<any[]> {
     const lines: any[] = [];
     for (let i = 0; i < dto.lines.length; i++) {
       const line = dto.lines[i];
@@ -449,13 +471,6 @@ export class InvoiceService extends BaseOdooService {
             value: line.product_external_ref,
           },
         ];
-        if (context.companyId) {
-          productDomain.push({
-            field: 'company_id',
-            operator: 'in',
-            value: [context.companyId, false],
-          });
-        }
         const products = await this.odooService.searchRead(
           'product.product',
           productDomain,
@@ -468,7 +483,7 @@ export class InvoiceService extends BaseOdooService {
           lineValues.product_id = products[0].id;
         } else {
           throw new BadRequestException(
-            `Line ${i + 1}: Product with external ref '${line.product_external_ref}' not found in Odoo`,
+            errProductRefNotFound(line.product_external_ref, i + 1),
           );
         }
       }
@@ -490,9 +505,7 @@ export class InvoiceService extends BaseOdooService {
       { fields: ['id'], limit: 1 },
     );
     if (!currencies || currencies.length === 0) {
-      throw new BadRequestException(
-        `Currency '${currencyCode}' not found or not active in Odoo`,
-      );
+      throw new BadRequestException(errCurrencyNotFound(currencyCode));
     }
     return currencies[0].id;
   }

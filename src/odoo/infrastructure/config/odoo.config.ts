@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { errOdooConfigRequired } from '../../../common/constants';
 
 /**
  * Type-safe configuration for Odoo connection
@@ -17,19 +18,19 @@ export class OdooConfigService {
 
   get database(): string {
     const db = this.configService.get<string>('ODOO_DATABASE');
-    if (!db) throw new Error('ODOO_DATABASE is required');
+    if (!db) throw new Error(errOdooConfigRequired('ODOO_DATABASE'));
     return db;
   }
 
   get username(): string {
     const user = this.configService.get<string>('ODOO_USERNAME');
-    if (!user) throw new Error('ODOO_USERNAME is required');
+    if (!user) throw new Error(errOdooConfigRequired('ODOO_USERNAME'));
     return user;
   }
 
   get password(): string {
     const pass = this.configService.get<string>('ODOO_PASSWORD');
-    if (!pass) throw new Error('ODOO_PASSWORD is required');
+    if (!pass) throw new Error(errOdooConfigRequired('ODOO_PASSWORD'));
     return pass;
   }
 

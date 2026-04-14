@@ -1,8 +1,16 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { OdooService } from '../odoo/odoo.service';
-import { WebhookService } from '../common/services/webhook.service';
+import { WebhookEmitterService } from '../webhook/services/webhook-emitter.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { ApiKeyContext } from '../auth/interfaces';
+import {
+  errRecordNotFound,
+  errInvoiceRefNotFound,
+  errInvoiceMustBePosted,
+  ERR_INVOICE_OR_REF_REQUIRED,
+  ACTION_CREATED,
+  ACTION_ALREADY_EXISTS,
+} from '../common/constants';
 
 @Injectable()
 export class PaymentService {
@@ -10,34 +18,29 @@ export class PaymentService {
 
   constructor(
     private readonly odooService: OdooService,
-    private readonly webhookService: WebhookService,
+    private readonly webhookEmitter: WebhookEmitterService,
   ) {}
 
   async createPayment(dto: CreatePaymentDto, context: ApiKeyContext) {
-    const result = await this.executeCreate(dto, context);
-    await this.webhookService.notify(context, {
-      event: result.created ? 'payment.created' : 'payment.exists',
-      status: 'success',
-      model: 'account.payment',
-      externalRef: dto.external_ref,
-      paymentId: result.paymentId,
-      data: result,
-    });
+    const result = await this.executeCreate(dto);
+    await this.webhookEmitter.emit(
+      context.systemName,
+      result.created ? 'payment.created' : 'payment.exists',
+      {
+        model: 'account.payment',
+        externalRef: dto.external_ref,
+        paymentId: result.paymentId,
+        ...result,
+      },
+    );
     return result;
   }
 
-  private async executeCreate(dto: CreatePaymentDto, context: ApiKeyContext) {
+  private async executeCreate(dto: CreatePaymentDto) {
     // Check if payment already exists by ref
     const paymentDomain: any[] = [
       { field: 'ref', operator: '=', value: dto.external_ref },
     ];
-    if (context.companyId) {
-      paymentDomain.push({
-        field: 'company_id',
-        operator: '=',
-        value: context.companyId,
-      });
-    }
     const existing = await this.odooService.searchRead(
       'account.payment',
       paymentDomain,
@@ -54,12 +57,12 @@ export class PaymentService {
       return {
         paymentId: existing[0].id,
         created: false,
-        action: 'already_exists',
+        action: ACTION_ALREADY_EXISTS,
       };
     }
 
     // Resolve the invoice
-    const invoiceId = await this.resolveInvoiceId(dto, context);
+    const invoiceId = await this.resolveInvoiceId(dto);
 
     const invoices = await this.odooService.read('account.move', [invoiceId], {
       fields: [
@@ -71,12 +74,12 @@ export class PaymentService {
       ],
     });
     if (!invoices || invoices.length === 0) {
-      throw new BadRequestException(`Invoice ID ${invoiceId} not found`);
+      throw new BadRequestException(errRecordNotFound('Invoice', invoiceId));
     }
     const invoice = invoices[0];
     if (invoice.state !== 'posted') {
       throw new BadRequestException(
-        `Invoice ID ${invoiceId} must be in 'posted' state to register payment (current: '${invoice.state}')`,
+        errInvoiceMustBePosted(invoiceId, invoice.state),
       );
     }
 
@@ -96,7 +99,6 @@ export class PaymentService {
         : invoice.partner_id,
       amount: dto.amount,
       ref: dto.external_ref,
-      company_id: context.companyId || false,
     };
 
     if (dto.ref) paymentValues.payment_reference = dto.ref;
@@ -142,7 +144,7 @@ export class PaymentService {
     const result: Record<string, any> = {
       paymentId: paymentId,
       created: true,
-      action: 'created',
+      action: ACTION_CREATED,
       invoiceId,
     };
     if (postError) {
@@ -152,22 +154,12 @@ export class PaymentService {
     return result;
   }
 
-  private async resolveInvoiceId(
-    dto: CreatePaymentDto,
-    context: ApiKeyContext,
-  ): Promise<number> {
+  private async resolveInvoiceId(dto: CreatePaymentDto): Promise<number> {
     if (dto.invoice_id) return dto.invoice_id;
     if (dto.invoice_external_ref) {
       const invoiceDomain: any[] = [
         { field: 'ref', operator: '=', value: dto.invoice_external_ref },
       ];
-      if (context.companyId) {
-        invoiceDomain.push({
-          field: 'company_id',
-          operator: '=',
-          value: context.companyId,
-        });
-      }
       const invoices = await this.odooService.searchRead(
         'account.move',
         invoiceDomain,
@@ -178,11 +170,9 @@ export class PaymentService {
       );
       if (invoices && invoices.length > 0) return invoices[0].id;
       throw new BadRequestException(
-        `Invoice with external ref '${dto.invoice_external_ref}' not found`,
+        errInvoiceRefNotFound(dto.invoice_external_ref),
       );
     }
-    throw new BadRequestException(
-      'Either invoice_id or invoice_external_ref must be provided',
-    );
+    throw new BadRequestException(ERR_INVOICE_OR_REF_REQUIRED);
   }
 }

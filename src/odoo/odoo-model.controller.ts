@@ -5,6 +5,7 @@ import {
   HttpStatus,
   Query,
   Param,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -22,6 +23,8 @@ import { ApiCommonErrorResponses } from '../common/decorators/api-error-response
 @ApiCommonErrorResponses()
 @Controller('odoo/models')
 export class OdooModelController {
+  private readonly logger = new Logger(OdooModelController.name);
+
   constructor(private readonly odooService: OdooService) {}
 
   @Get('info')
@@ -60,12 +63,24 @@ export class OdooModelController {
       // Checking OdooService... it seems it only has generic methods.
       // I will implement these using executeKw.
       if (model) {
-          const result = await this.odooService.executeKw('ir.model', 'search_read', [[['model', '=', model]]], { fields: ['name', 'model', 'info', 'state', 'transient'] });
-          return result;
+        const result = await this.odooService.executeKw(
+          'ir.model',
+          'search_read',
+          [[['model', '=', model]]],
+          { fields: ['name', 'model', 'info', 'state', 'transient'] },
+        );
+        return result;
       }
-      return await this.odooService.executeKw('ir.model', 'search_read', [], { fields: ['name', 'model', 'info', 'state', 'transient'], limit: 100 });
+      return await this.odooService.executeKw('ir.model', 'search_read', [], {
+        fields: ['name', 'model', 'info', 'state', 'transient'],
+        limit: 100,
+      });
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      this.logger.error('Failed to get model info', error);
+      throw new HttpException(
+        'Failed to retrieve model information',
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 
@@ -92,9 +107,18 @@ export class OdooModelController {
   })
   async getInstalledModules() {
     try {
-      return await this.odooService.executeKw('ir.module.module', 'search_read', [[['state', '=', 'installed']]], { fields: ['name', 'shortdesc', 'summary', 'category_id', 'version'] });
+      return await this.odooService.executeKw(
+        'ir.module.module',
+        'search_read',
+        [[['state', '=', 'installed']]],
+        { fields: ['name', 'shortdesc', 'summary', 'category_id', 'version'] },
+      );
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      this.logger.error('Failed to get installed modules', error);
+      throw new HttpException(
+        'Failed to retrieve installed modules',
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 
@@ -124,14 +148,23 @@ export class OdooModelController {
   })
   async getModelsByModule(@Param('moduleName') moduleName: string) {
     try {
-       // This is complex because mapping modules to models isn't direct in ir.model without joining.
-       // But we can search ir.model.data maybe? Or just search ir.model where modules contains the module?
-       // Let's try a simple search on ir.model.
-       // Actually, ir.model has a 'modules' field which is a string (comma separated) in some versions, or a relation.
-       // Let's assume standard Odoo behavior: ir.model has `modules` field.
-       return await this.odooService.executeKw('ir.model', 'search_read', [[['modules', 'ilike', moduleName]]], { fields: ['name', 'model', 'info'] });
+      // This is complex because mapping modules to models isn't direct in ir.model without joining.
+      // But we can search ir.model.data maybe? Or just search ir.model where modules contains the module?
+      // Let's try a simple search on ir.model.
+      // Actually, ir.model has a 'modules' field which is a string (comma separated) in some versions, or a relation.
+      // Let's assume standard Odoo behavior: ir.model has `modules` field.
+      return await this.odooService.executeKw(
+        'ir.model',
+        'search_read',
+        [[['modules', 'ilike', moduleName]]],
+        { fields: ['name', 'model', 'info'] },
+      );
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      this.logger.error('Failed to get models by module', error);
+      throw new HttpException(
+        'Failed to retrieve models for module',
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 
@@ -164,9 +197,21 @@ export class OdooModelController {
   })
   async getDetailedModelFields(@Param('model') model: string) {
     try {
-      return await this.odooService.fieldsGet(model, ['string', 'help', 'type', 'required', 'readonly', 'relation', 'selection']);
+      return await this.odooService.fieldsGet(model, [
+        'string',
+        'help',
+        'type',
+        'required',
+        'readonly',
+        'relation',
+        'selection',
+      ]);
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      this.logger.error('Failed to get model fields', error);
+      throw new HttpException(
+        'Failed to retrieve model fields',
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 

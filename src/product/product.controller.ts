@@ -25,9 +25,10 @@ import { ProductService } from './product.service';
 import { FilterProductDto, ProductDto } from './dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpsertProductDto } from './dto/upsert-product.dto';
-import { SearchDomain } from 'src/odoo/interfaces';
+import { SearchDomain } from '../odoo/interfaces';
 import { GetApiKeyContext } from '../auth/decorators';
 import { ApiKeyContext } from '../auth/interfaces';
+import { errRecordNotFound } from '../common/constants';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
 import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
 
@@ -168,7 +169,7 @@ export class ProductController {
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const product = await this.productService.findOne(id);
     if (!product) {
-      throw new BadRequestException(`Product with ID ${id} not found`);
+      throw new BadRequestException(errRecordNotFound('Product', id));
     }
     return product;
   }

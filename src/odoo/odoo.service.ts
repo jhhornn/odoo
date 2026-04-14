@@ -1,4 +1,6 @@
 import { Injectable, HttpStatus, Logger } from '@nestjs/common';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import { XmlRpcClientFactory } from './factories/xml-rpc-client.factory';
 import { IOdooClient } from './interfaces/odoo-client.interface';
 import {
@@ -7,6 +9,12 @@ import {
 } from './infrastructure/exceptions/odoo.exception';
 import { SearchDomain, SearchOptions, ReadOptions } from './interfaces';
 import { OdooConfigService } from './infrastructure/config/odoo.config';
+import {
+  ODOO_CACHE_PREFIX,
+  ODOO_CACHE_TTL,
+  ERR_AUTH_FAILED_CHECK_CREDENTIALS,
+  errOdooRpcFailed,
+} from '../common/constants';
 
 /**
  * Core service for Odoo XML-RPC communication
@@ -37,6 +45,7 @@ export class OdooService {
   constructor(
     private config: OdooConfigService,
     private clientFactory: XmlRpcClientFactory,
+    @InjectRedis() private readonly redis: Redis,
   ) {
     this.initializeClients();
   }
@@ -73,7 +82,7 @@ export class OdooService {
       if (!uid) {
         throw new OdooException(
           OdooErrorCode.INVALID_CREDENTIALS,
-          'Authentication failed - check credentials',
+          ERR_AUTH_FAILED_CHECK_CREDENTIALS,
           HttpStatus.UNAUTHORIZED,
         );
       }
@@ -132,13 +141,15 @@ export class OdooService {
       // Odoo actions (action_post, button_cancel, etc.) return None,
       // which XML-RPC can't serialize. This is a successful operation.
       if (error.message?.includes('cannot marshal None')) {
-        this.logger.debug(`RPC [${model}.${method}]: action returned None (success)`);
+        this.logger.debug(
+          `RPC [${model}.${method}]: action returned None (success)`,
+        );
         return null;
       }
       this.logger.error(`RPC Error [${model}.${method}]: ${error.message}`);
       throw new OdooException(
         OdooErrorCode.API_ERROR,
-        `${model}.${method} failed: ${error.message}`,
+        errOdooRpcFailed(model, method, error.message),
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -241,6 +252,57 @@ export class OdooService {
       [searchDomain],
       sanitizedOptions,
     );
+  }
+
+  /**
+   * Cached version of searchRead. Returns Redis-cached results when available.
+   * Use for read-heavy, infrequently-changing models (partners, products).
+   *
+   * @param model - Odoo model name
+   * @param domain - Search criteria
+   * @param options - Query options
+   * @param ttl - Cache TTL in seconds (default 60)
+   */
+  async cachedSearchRead(
+    model: string,
+    domain: SearchDomain[] = [],
+    options: SearchOptions & ReadOptions = {},
+    ttl: number = ODOO_CACHE_TTL,
+  ): Promise<any[]> {
+    const cacheKey = `${ODOO_CACHE_PREFIX}${model}:${JSON.stringify(domain)}:${JSON.stringify(options)}`;
+
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
+    const results = await this.searchRead(model, domain, options);
+
+    await this.redis.set(cacheKey, JSON.stringify(results), 'EX', ttl);
+
+    return results;
+  }
+
+  /**
+   * Invalidate all cached searchRead results for a model.
+   * Call after create/write/unlink operations.
+   */
+  async invalidateModelCache(model: string): Promise<void> {
+    const pattern = `${ODOO_CACHE_PREFIX}${model}:*`;
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        100,
+      );
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } while (cursor !== '0');
   }
 
   /**
