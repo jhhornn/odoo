@@ -51,9 +51,3 @@ services:
     internal_ports:
       - 6379
 
-databases:
-  - cluster_name: octohealth-db
-    engine: PG
-    name: octohealth-db
-    production: true
-    version: "15"
