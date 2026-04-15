@@ -14,42 +14,26 @@ databases:
     production: true
 
 envs:
-  - key: ODOO_URL
+  - key: NODE_ENV
     scope: RUN_AND_BUILD_TIME
-    value: https://afyacarestaging.odoo.com
-
-  - key: ODOO_DATABASE
-    scope: RUN_AND_BUILD_TIME
-    value: odoo-dev
-
-  - key: ODOO_USERNAME
-    scope: RUN_AND_BUILD_TIME
-    value: odoo
-
-  - key: ODOO_PASSWORD
-    scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: ""
+    value: production
 
   - key: PORT
     scope: RUN_AND_BUILD_TIME
     value: "3000"
 
-  - key: NODE_ENV
-    scope: RUN_AND_BUILD_TIME
-    value: production
-
-  - key: DATABASE_URL
-    scope: RUN_AND_BUILD_TIME
-    value: postgresql://${octohealth-v2.USERNAME}:${octohealth-v2.PASSWORD}@${octohealth-v2.HOSTNAME}:${octohealth-v2.PORT}/${octohealth-v2.DATABASE}?schema=public&sslmode=require
+  - key: APP_HOSTNAME
+    scope: RUN_TIME
+    value: "0.0.0.0"
 
   - key: REDIS_URL
     scope: RUN_AND_BUILD_TIME
     value: redis://redis:6379
 
-  - key: APP_HOSTNAME
-    scope: RUN_TIME
-    value: "0.0.0.0"
+  # Resolved from the bound DB cluster at deploy time — not a secret
+  - key: DATABASE_URL
+    scope: RUN_AND_BUILD_TIME
+    value: postgresql://${octohealth-v2.USERNAME}:${octohealth-v2.PASSWORD}@${octohealth-v2.PRIVATE_HOSTNAME}:${octohealth-v2.PORT}/${octohealth-v2.DATABASE}?schema=public&sslmode=require
 
 ingress:
   rules:
@@ -67,14 +51,14 @@ services:
       branch: main
       deploy_on_push: true
     source_dir: /
-    build_command: yarn install --frozen-lockfile && yarn prisma:generate && yarn build
-    run_command: npx prisma migrate deploy && yarn start:prod
+    build_command: yarn install --frozen-lockfile --production=false && yarn prisma:generate && yarn build
+    run_command: npx prisma migrate deploy && yarn start
     http_port: 3000
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-1gb-fixed
 
     health_check:
-      http_path: /api/v1
+      http_path: /doc
       initial_delay_seconds: 60
       period_seconds: 10
       timeout_seconds: 5
