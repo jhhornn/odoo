@@ -1,8 +1,66 @@
-name: nest-odoo-integration
+name: odoo-api
 region: lon
 
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+
+databases:
+  - cluster_name: octohealth-v2
+    db_name: odoo-dev
+    db_user: odoo
+    engine: PG
+    name: octohealth-v2
+    production: true
+
+envs:
+  - key: ODOO_URL
+    scope: RUN_AND_BUILD_TIME
+    value: https://afyacarestaging.odoo.com
+
+  - key: ODOO_DATABASE
+    scope: RUN_AND_BUILD_TIME
+    value: odoo-dev
+
+  - key: ODOO_USERNAME
+    scope: RUN_AND_BUILD_TIME
+    value: odoo
+
+  - key: ODOO_PASSWORD
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: ""
+
+  - key: PORT
+    scope: RUN_AND_BUILD_TIME
+    value: "3000"
+
+  - key: NODE_ENV
+    scope: RUN_AND_BUILD_TIME
+    value: production
+
+  - key: DATABASE_URL
+    scope: RUN_AND_BUILD_TIME
+    value: postgresql://${octohealth-v2.USERNAME}:${octohealth-v2.PASSWORD}@${octohealth-v2.HOSTNAME}:${octohealth-v2.PORT}/${octohealth-v2.DATABASE}?schema=public&sslmode=require
+
+  - key: REDIS_URL
+    scope: RUN_AND_BUILD_TIME
+    value: redis://redis:6379
+
+  - key: APP_HOSTNAME
+    scope: RUN_TIME
+    value: "0.0.0.0"
+
+ingress:
+  rules:
+    - component:
+        name: nest-odoo-integration
+      match:
+        path:
+          prefix: /
+
 services:
-  - name: api
+  - name: nest-odoo-integration
     environment_slug: node-js
     github:
       repo: octosoft-ai/nest-odoo-integration
@@ -13,7 +71,7 @@ services:
     run_command: npx prisma migrate deploy && yarn start:prod
     http_port: 3000
     instance_count: 1
-    instance_size_slug: basic-xs
+    instance_size_slug: apps-s-1vcpu-1gb-fixed
 
     health_check:
       http_path: /api/v1
@@ -22,23 +80,6 @@ services:
       timeout_seconds: 5
       success_threshold: 1
       failure_threshold: 3
-
-    envs:
-      - key: NODE_ENV
-        scope: RUN_AND_BUILD_TIME
-        value: production
-
-      - key: PORT
-        scope: RUN_TIME
-        value: "3000"
-
-      - key: APP_HOSTNAME
-        scope: RUN_TIME
-        value: "0.0.0.0"
-
-      - key: REDIS_URL
-        scope: RUN_TIME
-        value: redis://redis:6379
 
   - name: redis
     image:
