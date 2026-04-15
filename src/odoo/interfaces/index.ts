@@ -5,21 +5,23 @@ export interface OdooConfig {
   password: string;
 }
 
-export interface SearchDomain {
-  field: string;
-  operator:
-    | '='
-    | '!='
-    | '>'
-    | '<'
-    | '>='
-    | '<='
-    | 'like'
-    | 'ilike'
-    | 'in'
-    | 'not in';
-  value: any;
-}
+export type SearchDomain =
+  | string
+  | {
+      field: string;
+      operator:
+        | '='
+        | '!='
+        | '>'
+        | '<'
+        | '>='
+        | '<='
+        | 'like'
+        | 'ilike'
+        | 'in'
+        | 'not in';
+      value: any;
+    };
 
 export interface SearchOptions {
   limit?: number;

@@ -1,15 +1,46 @@
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsIn,
+  IsNumber,
+  Min,
+  Max,
+  IsArray,
+  MaxLength,
+  ValidateNested,
+  IsObject,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { SearchDomain } from '../interfaces';
+
+const SEARCH_OPERATORS = [
+  '=',
+  '!=',
+  '>',
+  '<',
+  '>=',
+  '<=',
+  'like',
+  'ilike',
+  'in',
+  'not in',
+] as const;
 
 export class SearchDomainDto {
   @ApiProperty({ example: 'name', description: 'Field name to search on' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
   field: string;
 
   @ApiProperty({
     example: '=',
-    enum: ['=', '!=', '>', '<', '>=', '<=', 'like', 'ilike', 'in', 'not in'],
+    enum: SEARCH_OPERATORS,
     description: 'Search operator',
   })
+  @IsIn(SEARCH_OPERATORS)
   operator:
     | '='
     | '!='
@@ -26,6 +57,7 @@ export class SearchDomainDto {
     example: 'Azure Interior',
     description: 'Value to search for',
   })
+  @IsNotEmpty()
   value: any;
 }
 
@@ -36,6 +68,10 @@ export class SearchDto {
     description: 'Search domain filters',
     example: [{ field: 'is_company', operator: '=', value: true }],
   })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SearchDomainDto)
   domain?: SearchDomain[];
 
   @ApiProperty({
@@ -43,6 +79,11 @@ export class SearchDto {
     example: 10,
     description: 'Maximum number of records to return',
   })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(1000)
+  @Type(() => Number)
   limit?: number;
 
   @ApiProperty({
@@ -50,6 +91,10 @@ export class SearchDto {
     example: 0,
     description: 'Number of records to skip',
   })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
   offset?: number;
 
   @ApiProperty({
@@ -57,6 +102,9 @@ export class SearchDto {
     example: 'name ASC',
     description: 'Sort order (field ASC/DESC)',
   })
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
   order?: string;
 }
 
@@ -67,6 +115,9 @@ export class SearchReadDto extends SearchDto {
     example: ['name', 'email', 'phone'],
     description: 'Fields to retrieve',
   })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   fields?: string[];
 }
 
@@ -79,6 +130,8 @@ export class CreateRecordDto {
     },
     description: 'Field values for the new record',
   })
+  @IsObject()
+  @IsNotEmpty()
   values: Record<string, any>;
 }
 
@@ -87,36 +140,9 @@ export class UpdateRecordDto {
     example: { name: 'Updated Partner', phone: '+1-555-0123' },
     description: 'Field values to update',
   })
+  @IsObject()
+  @IsNotEmpty()
   values: Record<string, any>;
-}
-
-export class CreateInvoiceDto {
-  @ApiProperty({
-    example: {
-      move_type: 'out_invoice',
-      partner_id: 7,
-      invoice_date: '2025-07-28',
-      invoice_line_ids: [
-        [
-          0,
-          0,
-          {
-            name: 'Consulting Services',
-            quantity: 10,
-            price_unit: 150.0,
-          },
-        ],
-      ],
-    },
-    description: 'Invoice data',
-  })
-  values: {
-    move_type: 'out_invoice' | 'in_invoice' | 'out_refund' | 'in_refund';
-    partner_id: number;
-    invoice_date?: string;
-    payment_reference?: string;
-    invoice_line_ids: any[];
-  };
 }
 
 export class OdooModelDto {
@@ -124,12 +150,16 @@ export class OdooModelDto {
     description: 'Technical model identifier used in Odoo',
     example: 'account_followup.followup.line',
   })
+  @IsString()
+  @IsNotEmpty()
   model: string;
 
   @ApiProperty({
     description: 'Human-readable name or description of the model',
     example: 'Follow-up Criteria',
   })
+  @IsString()
+  @IsNotEmpty()
   name: string;
 }
 

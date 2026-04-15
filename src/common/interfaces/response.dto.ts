@@ -1,5 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
-import { IResponseWrapper, ResponseMessage } from 'src/odoo/interfaces';
+import { IResponseWrapper, ResponseMessage } from '../../odoo/interfaces';
 
 export class SuccessResponse implements IResponseWrapper {
   statusCode: number = HttpStatus.OK;

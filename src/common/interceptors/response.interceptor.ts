@@ -11,7 +11,7 @@ import {
   ApiResponseMetaOptions,
   API_RESPONSE_META,
 } from '../decorators/response.decorators';
-import { ResponseMessage } from 'src/odoo/interfaces';
+import { ResponseMessage } from '../../odoo/interfaces';
 
 export interface Response<T> {
   data: T;
@@ -41,9 +41,9 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, Response<T>> {
 
     return next.handle().pipe(
       map((data) => ({
-        statusCode: responseOptions?.statusCode || 200,
+        statusCode: context.switchToHttp().getResponse().statusCode || 200,
         message,
-        data,
+        data: data || null,
       })),
     );
   }

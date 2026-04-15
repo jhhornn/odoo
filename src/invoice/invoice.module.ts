@@ -1,19 +1,13 @@
 import { Module } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
-import { InvoicesController } from './invoice.controller';
-import { OdooService } from 'src/odoo/odoo.service';
-import { XmlRpcClientFactory } from 'src/odoo/factories/xml-rpc-client.factory';
-import { PartnerService } from 'src/partner/partner.service';
-import { ProductService } from 'src/product/product.service';
+import { InvoiceController } from './invoice.controller';
+import { OdooModule } from '../odoo/odoo.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  controllers: [InvoicesController],
-  providers: [
-    InvoiceService,
-    OdooService,
-    XmlRpcClientFactory,
-    PartnerService,
-    ProductService,
-  ],
+  imports: [OdooModule, AuthModule],
+  providers: [InvoiceService],
+  controllers: [InvoiceController],
+  exports: [InvoiceService],
 })
 export class InvoiceModule {}

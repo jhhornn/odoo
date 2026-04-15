@@ -1,336 +1,109 @@
-# nest-odoo-integration
-NestJS Odoo XML-RPC API Integration
+# @nestjs-odoo/core
 
-# NestJS Odoo XML-RPC API Integration
-
-A comprehensive NestJS API that interfaces with Odoo's XML-RPC endpoints, providing a RESTful wrapper for Odoo operations.
-This API is **dynamic and extensible**, with dedicated controllers and DTOs for common models like Partners, Products, and Invoices.
+Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC.
 
 ## Features
 
-* ✅ **Complete Odoo API Coverage**: Create, read, update, delete, search, and count records
-* ✅ **Dynamic Model Support**: Works with any Odoo model using generic endpoints
-* ✅ **Model-Specific Controllers**: Prebuilt controllers & DTOs for **Partners**, **Products**, and **Invoices**
-* ✅ **Filtering Support**: Query partners, products, and invoices with flexible filters
-* ✅ **RESTful Design**: Clean REST endpoints with proper HTTP methods
-* ✅ **TypeScript + Swagger**: Strong typing and auto-generated docs
-* ✅ **Error Handling**: Maps Odoo XML-RPC faults to friendly HTTP errors
-* ✅ **Extensible**: Easy to add new model-specific controllers and DTOs
-
-## Table of Contents
-
-* [Installation](#installation)
-* [Configuration](#configuration)
-* [API Endpoints](#api-endpoints)
-* [Model-Specific Extensions](#model-specific-extensions)
-* [Usage Examples](#usage-examples)
-* [Error Handling](#error-handling)
-* [Development](#development)
+- **High Performance** — Optimized XML-RPC client with connection pooling
+- **Type Safe** — Fully typed DTOs and responses
+- **Easy Integration** — Plug-and-play NestJS module
+- **Swagger Documentation** — Built-in Swagger UI when running as a server
+- **Modular Design** — Import only the modules you need
+- **Dual-Use** — Standalone API server or library in your own NestJS app
+- **Database-Backed Auth** — API keys stored as SHA-256 hashes with prefix-based lookup
+- **Reliable Webhooks** — HMAC-signed, BullMQ-queued delivery with automatic retries
+- **Rate Limiting** — Sliding-window rate limiter per API key tier via Redis
 
 ---
 
-## Installation
+## Quick Start
+
+### As a Standalone Server
 
 ```bash
 git clone <repository-url>
-cd nestjs-odoo-api
-
+cd odoo
 yarn install
-cp .env.example .env
+cp .env.example .env   # Configure your Odoo connection
+yarn start:dev          # http://localhost:3000
 ```
 
-Start the app:
+### As a Library
 
 ```bash
-yarn run start:dev
+yarn add @nestjs-odoo/core
 ```
+
+```typescript
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { OdooModule, PartnerModule, ProductModule, InvoiceModule } from '@nestjs-odoo/core';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    OdooModule,
+    PartnerModule,
+    ProductModule,
+    InvoiceModule,
+  ],
+})
+export class AppModule {}
+```
+
+See [Getting Started](docs/getting-started.md) for full setup including environment variables and authentication.
 
 ---
 
-## Configuration
+## Documentation
 
-`.env` file:
-
-```env
-ODOO_URL=https://company.odoo.com
-ODOO_DATABASE=your_db
-ODOO_USERNAME=your_username
-ODOO_PASSWORD=your_password
-PORT=3000
-```
+| Document | Description |
+|---|---|
+| [Getting Started](docs/getting-started.md) | Installation, configuration, environment variables, running the app |
+| [API Reference](docs/api-reference.md) | Complete endpoint reference — generic Odoo, partners, products, invoices, payments |
+| [Integration Guide](docs/integration-guide.md) | Sync workflows, webhooks, error handling, idempotency (for external system developers) |
+| [Extending & Library Usage](docs/extending.md) | Using as an NPM library, adding custom modules, exported API |
 
 ---
 
-## API Endpoints
-
-### Generic Endpoints
-
-All generic endpoints follow `/odoo/{model}/{action}`.
-
-| Method | Endpoint                   | Description           |
-| ------ | -------------------------- | --------------------- |
-| GET    | `/odoo/:model/fields`      | Get model fields      |
-| POST   | `/odoo/:model/search`      | Search for IDs        |
-| POST   | `/odoo/:model/search-read` | Search & read         |
-| GET    | `/odoo/:model/:ids`        | Read records by ID(s) |
-| POST   | `/odoo/:model`             | Create records        |
-| PUT    | `/odoo/:model/:ids`        | Update records        |
-| DELETE | `/odoo/:model/:ids`        | Delete records        |
-| GET    | `/odoo/:model/name-search` | Search by name        |
-| POST   | `/odoo/:model/count`       | Count records         |
-
-### Model-Specific Endpoints
-
-#### Partners (`/partners`)
-
-* `GET /partners` → list with filters (DTO-based)
-* `GET /partners/:id` → get by ID
-* `POST /partners` → create partner
-* `PUT /partners/:id` → update partner
-* `DELETE /partners/:id` → delete partner
-
-#### Products (`/products`)
-
-* Same as partners, with product-specific DTOs
-
-#### Invoices (`/invoices`)
-
-* `GET /invoices` → list invoices with filters
-* `GET /invoices/:id` → fetch invoice by ID
-* `POST /invoices` → create invoice (supports lines)
-* `PUT /invoices/:id` → update invoice fields
-* `DELETE /invoices/:id` → delete invoice
-
----
-
-## Model-Specific Extensions
-
-We now use **DTOs** to validate inputs and generate proper Swagger documentation.
-
-### Example: Create Invoice
-
-```ts
-export class CreateInvoiceDto {
-  @ApiProperty({ example: 'out_invoice' })
-  move_type: 'out_invoice' | 'in_invoice' | 'out_refund' | 'in_refund';
-
-  @ApiProperty({ example: 7 })
-  partner_id: number;
-
-  @ApiPropertyOptional({ example: '2025-08-22' })
-  invoice_date?: string;
-
-  @ApiPropertyOptional({ example: 'INV0001' })
-  payment_reference?: string;
-
-  @ApiProperty({
-    example: [
-      [0, 0, { product_id: 42, name: 'Consulting', quantity: 10, price_unit: 150 }]
-    ],
-  })
-  invoice_line_ids: any[];
-}
-```
-
-> ⚠️ **Note on Products in Invoices**:
-> Odoo expects the `product_id` from `product.product` (variant), not `product.template`.
-> Use `/products` endpoint to fetch valid IDs before creating invoice lines.
-
----
-
-## 📄 Creating Invoices with Partners
-
-When creating an invoice, it’s important to ensure that the **partner** (customer/vendor) and the **invoice** belong to the same company. Otherwise, Odoo will return an error like:
-
-```
-Incompatible companies on records:
-- 'Draft Invoice (...)' belongs to company 'Company A'
-- 'Partner' (partner_id: 'XYZ') belongs to another company.
-```
-
-To avoid this, always fetch the `company_id` of the partner and pass it when creating the invoice.
-
----
-
-### 1. 🔍 Find Partner with Company ID
-
-Use the `/partners` endpoint to search for the partner and include `company_id` in the returned fields.
-
-**Example request:**
-
-```http
-GET http://localhost:3000/api/v1/partners?name=Bastion&is_company=true&limit=50&offset=0&fields=name&fields=email&fields=phone&fields=country_id&fields=company_id
-```
-
-**Example response:**
-
-```json
-{
-  "statusCode": 200,
-  "message": "Request Successful!",
-  "data": 123
-}
-```
-
-Take note of the `company_id` value (e.g., `4` in this case).
-
----
-
-### 2. 🧾 Create Invoice with Correct Company
-
-Now call the `/invoices` endpoint with both `partner_id` and `company_id`.
-
-**Example request:**
-
-```json
-
-{
-  "move_type": "out_invoice",
-  "partner_id": 3944,
-  "company_id": 4,
-  "invoice_date": "2025-07-28",
-  "payment_reference": "PO1234",
-  "invoice_line_ids": [
-    [
-      0,
-      0,
-      {
-        "name": "Consulting Services",
-        "quantity": 10,
-        "price_unit": 150,
-        "product_id": 3309
-      }
-    ],
-    [
-      0,
-      0,
-      {
-        "name": "Additional Service",
-        "quantity": 5,
-        "price_unit": 200,
-        "product_id": 3310
-      }
-    ]
-  ]
-}
-```
-
-**Example response:**
-
-```json
-{
-  "statusCode": 200,
-  "message": "Request Successful!",
-  "data": 768146
-}
-```
-
----
-
-### ✅ Key Notes
-
-* Always include `company_id` from the partner when creating invoices.
-* `invoice_line_ids` accepts multiple lines using the Odoo triplet format `[0, 0, {fields}]`.
-* Use the `/partners` endpoint first to fetch a valid `partner_id` + `company_id`.
-* Then pass both values to `/invoices`.
-
----
-
-## Usage Examples
-
-### Fetch Partners
-
-```bash
-GET /partners?name=azure&limit=5
-```
-
-### Create Product
-
-```bash
-POST /products
-{
-  "name": "Premium Service",
-  "list_price": 199.99,
-  "type": "service",
-  "sale_ok": true
-}
-```
-
-### Create Invoice
-
-```bash
-POST /invoices
-{
-  "move_type": "out_invoice",
-  "partner_id": 3272,
-  "invoice_date": "2025-08-22",
-  "invoice_line_ids": [
-    [
-      0,
-      0,
-      {
-        "name": "Consulting Services",
-        "product_id": 135,
-        "quantity": 10,
-        "price_unit": 150
-      }
-    ],
-    [
-      0,
-      0,
-      {
-        "name": "Implementation Support",
-        "product_id": 140,
-        "quantity": 5,
-        "price_unit": 200
-      }
-    ],
-    [
-      0,
-      0,
-      {
-        "name": "Maintenance Package",
-        "product_id": 145,
-        "quantity": 1,
-        "price_unit": 500
-      }
-    ]
-  ]
-}
-
-```
-
----
-
-## Error Handling
-
-* **401 Authentication Failed**
-* **400 Record Not Found** (e.g., product/product\_id doesn’t exist)
-* **400 Invalid Field** if wrong field supplied
-* **Type Conversion Errors** are handled (filters/limit/offset cast to numbers)
-
----
-
-## Development
-
-### Project Structure
+## Architecture
 
 ```
 src/
-├── odoo/                # Generic Odoo module
-├── partners/            # Partner controller, service, DTOs
-├── products/            # Product controller, service, DTOs
-├── invoices/            # Invoice controller, service, DTOs
-└── app.module.ts
+├── auth/        # API key authentication (hashed), rate limiting
+├── common/      # Shared base service, decorators, interceptors, database (Prisma)
+├── redis/       # Redis module (caching, rate limiting, BullMQ)
+├── webhook/     # Webhook registry, HMAC-signed delivery via BullMQ
+├── odoo/        # Core Odoo XML-RPC client and generic CRUD
+├── partner/     # res.partner domain (customers, vendors, contacts)
+├── product/     # product.product domain (products, plans)
+├── invoice/     # account.move domain (invoices, bills)
+└── payment/     # account.payment domain (payment registration)
 ```
-
-### Adding New Models
-
-1. Create a DTO (create/update/filter).
-2. Create a service extending `OdooService`.
-3. Add a controller with endpoints.
-4. Register in `AppModule`.
 
 ---
 
+## Sync Workflow
 
+For external systems integrating with Odoo, the sync order is:
+
+```
+1. Partners     POST /partners        (customers & vendors)
+2. Products     POST /products        (plans & physical goods)
+3. Invoices     POST /invoices        (references partners + products)
+4. Payments     POST /payments        (references posted invoices)
+```
+
+All sync endpoints are idempotent — safe to retry on failure. See the [Integration Guide](docs/integration-guide.md) for details.
+
+---
+
+## Swagger UI
+
+Start the server and visit: **http://localhost:3000/api**
+
+---
+
+## License
+
+MIT

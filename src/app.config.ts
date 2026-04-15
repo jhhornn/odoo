@@ -1,4 +1,5 @@
 import * as dotenv from 'dotenv';
+import { errEnvVarMissing } from './common/constants';
 
 dotenv.config();
 
@@ -9,7 +10,7 @@ export const env = <T = any>(key: string, defaultVal: any = undefined): T => {
 env.require = <T = any>(key: string, defaultVal: any = undefined): T => {
   const value = process.env[key] ?? defaultVal;
   if (!value) {
-    throw new Error(`Environment variable '${key}' is missing!`);
+    throw new Error(errEnvVarMissing(key));
   }
   return value;
 };
