@@ -427,6 +427,16 @@ export class InvoiceService extends BaseOdooService {
       result.autoPostFailed = true;
       result.autoPostError = autoPostError;
     }
+    if (dto.auto_post && !autoPostError) {
+      const posted = await this.odooService.searchRead(
+        'account.move',
+        [{ field: 'id', operator: '=', value: newId }],
+        { fields: ['name'], limit: 1 },
+      );
+      if (posted && posted.length > 0) {
+        result.invoiceNumber = posted[0].name;
+      }
+    }
     return result;
   }
 
