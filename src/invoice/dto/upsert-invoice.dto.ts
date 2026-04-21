@@ -21,23 +21,36 @@ import { Type } from 'class-transformer';
 export class UpsertInvoiceLineDto {
   @ApiProperty({
     example: 'Consulting Service',
-    description: 'Line item description displayed on the invoice. If a product is linked, this overrides the product\'s default description.',
+    description:
+      "Line item description displayed on the invoice. If a product is linked, this overrides the product's default description.",
   })
   @IsString()
   @IsNotEmpty({ message: 'Line description is required' })
   @MaxLength(4000)
   name: string;
 
-  @ApiProperty({ example: 2, description: 'Number of units. Multiplied by price_unit (minus discount) to calculate the line total.' })
+  @ApiProperty({
+    example: 2,
+    description:
+      'Number of units. Multiplied by price_unit (minus discount) to calculate the line total.',
+  })
   @IsNumber({}, { message: 'Quantity must be a number' })
   @Min(0, { message: 'Quantity cannot be negative' })
   quantity: number;
 
-  @ApiProperty({ example: 1500.0, description: 'Price per unit in the invoice currency. Line total = quantity × price_unit × (1 - discount/100).' })
+  @ApiProperty({
+    example: 1500.0,
+    description:
+      'Price per unit in the invoice currency. Line total = quantity × price_unit × (1 - discount/100).',
+  })
   @IsNumber({}, { message: 'Unit price must be a number' })
   price_unit: number;
 
-  @ApiPropertyOptional({ example: 101, description: 'Odoo product ID (product.product). Links this line to a product for reporting and defaults (account, taxes). Optional — lines can be free-text without a product.' })
+  @ApiPropertyOptional({
+    example: 101,
+    description:
+      'Odoo product ID (product.product). Links this line to a product for reporting and defaults (account, taxes). Optional — lines can be free-text without a product.',
+  })
   @IsNumber()
   @IsOptional()
   product_id?: number;
@@ -53,7 +66,8 @@ export class UpsertInvoiceLineDto {
 
   @ApiPropertyOptional({
     example: 10,
-    description: 'Discount percentage (0-100). Only supported on customer invoices (out_invoice).',
+    description:
+      'Discount percentage (0-100). Only supported on customer invoices (out_invoice).',
   })
   @IsNumber()
   @IsOptional()
@@ -63,14 +77,16 @@ export class UpsertInvoiceLineDto {
 
   @ApiPropertyOptional({
     example: 5,
-    description: 'Account ID in Odoo (account.account). If omitted, Odoo uses the product or journal default.',
+    description:
+      'Account ID in Odoo (account.account). If omitted, Odoo uses the product or journal default.',
   })
   @IsNumber()
   @IsOptional()
   account_id?: number;
 
   @ApiPropertyOptional({
-    description: 'Tax IDs to apply to this line using Odoo command format: `[[6, 0, [tax_id_1, tax_id_2]]]`. The `[6, 0, [...]]` command replaces all existing taxes. If omitted, Odoo uses the product\'s default taxes.',
+    description:
+      "Tax IDs to apply to this line using Odoo command format: `[[6, 0, [tax_id_1, tax_id_2]]]`. The `[6, 0, [...]]` command replaces all existing taxes. If omitted, Odoo uses the product's default taxes.",
     example: [[6, 0, [1]]],
   })
   @IsOptional()
@@ -80,7 +96,8 @@ export class UpsertInvoiceLineDto {
 export class UpsertInvoiceDto {
   @ApiProperty({
     example: 'EXT-INV-001',
-    description: 'Unique identifier from your external system. Used for idempotent upsert — if an invoice with this ref exists, it updates (draft only). Stored as `ref` in Odoo.',
+    description:
+      'Unique identifier from your external system. Used for idempotent upsert — if an invoice with this ref exists, it updates (draft only). Stored as `ref` in Odoo.',
   })
   @IsString()
   @IsNotEmpty({ message: 'external_ref is required' })
@@ -99,7 +116,11 @@ export class UpsertInvoiceDto {
   })
   move_type: string;
 
-  @ApiPropertyOptional({ example: 7, description: 'Odoo partner ID (res.partner). The customer/vendor this invoice is billed to. Provide either this or partner_external_ref — not both.' })
+  @ApiPropertyOptional({
+    example: 7,
+    description:
+      'Odoo partner ID (res.partner). The customer/vendor this invoice is billed to. Provide either this or partner_external_ref — not both.',
+  })
   @IsNumber()
   @IsOptional()
   partner_id?: number;
@@ -115,8 +136,7 @@ export class UpsertInvoiceDto {
 
   @ApiPropertyOptional({
     example: '2025-07-28',
-    description:
-      'Invoice date (YYYY-MM-DD). Defaults to today if omitted.',
+    description: 'Invoice date (YYYY-MM-DD). Defaults to today if omitted.',
   })
   @IsOptional()
   @IsString()
@@ -167,7 +187,8 @@ export class UpsertInvoiceDto {
 
   @ApiPropertyOptional({
     example: 'PO-2025-001',
-    description: 'Free-text memo field. Typically used for the external system\'s purchase order number, internal notes, or payment instructions. Shown on printed invoices under "Notes".',
+    description:
+      'Free-text memo field. Typically used for the external system\'s purchase order number, internal notes, or payment instructions. Shown on printed invoices under "Notes".',
   })
   @IsString()
   @IsOptional()
@@ -186,14 +207,16 @@ export class UpsertInvoiceDto {
 
   @ApiPropertyOptional({
     example: true,
-    description: 'If false, the invoice is archived. Rarely used — prefer cancel/delete for invoices instead of archiving.',
+    description:
+      'If false, the invoice is archived. Rarely used — prefer cancel/delete for invoices instead of archiving.',
   })
   @IsBoolean()
   @IsOptional()
   active?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Additional Odoo fields to set on the invoice record. Common fields: `payment_reference` (payment communication), `fiscal_position_id` (tax mapping), `invoice_origin` (source document reference).',
+    description:
+      'Additional Odoo fields to set on the invoice record. Common fields: `payment_reference` (payment communication), `fiscal_position_id` (tax mapping), `invoice_origin` (source document reference).',
   })
   @IsObject()
   @IsOptional()

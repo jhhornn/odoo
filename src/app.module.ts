@@ -9,6 +9,7 @@ import { PartnerModule } from './partner/partner.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { ProductModule } from './product/product.module';
 import { PaymentModule } from './payment/payment.module';
+import { TaxModule } from './tax/tax.module';
 import { AuthModule } from './auth/auth.module';
 import { ApiKeyGuard, RateLimitGuard } from './auth/guards';
 import { DatabaseModule } from './common/database/database.module';
@@ -38,6 +39,7 @@ import { WebhookModule } from './webhook/webhook.module';
     InvoiceModule,
     ProductModule,
     PaymentModule,
+    TaxModule,
   ],
   controllers: [AppController],
   providers: [
