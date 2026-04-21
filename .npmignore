@@ -1,0 +1,14 @@
+src
+test
+*.spec.ts
+*.test.ts
+.env
+.env.*
+tsconfig.json
+tsconfig.build.json
+nest-cli.json
+.eslintrc.js
+.prettierrc
+node_modules
+.git
+.gitignore

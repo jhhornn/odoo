@@ -1,0 +1,86 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── API KEY AUTHENTICATION ───
+
+model ApiKey {
+  id             String    @id @default(uuid())
+  prefix         String    @db.VarChar(8)     // first 8 chars for fast lookup
+  keyHash        String    @unique             // SHA-256 hash of the full key
+  systemName     String    @unique
+  scopes         String[]  @default([])        // permissions, e.g. ["read", "write"]
+  rateLimitTier  String    @default("default") // maps to config for rate limiting
+  isActive       Boolean   @default(true)
+  revokedAt      DateTime?
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  lastUsedIp     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([prefix])
+  @@map("api_keys")
+}
+
+// ─── WEBHOOK SYSTEM ───
+
+model WebhookRegistration {
+  id                String    @id @default(uuid())
+  serviceName       String
+  url               String                        // must be HTTPS
+  encryptedSigningSecret String                    // AES-256-GCM encrypted; never returned after creation
+  eventTypes        String[]                      // e.g. ["partner.created", "invoice.created"]
+  active            Boolean   @default(true)
+  failureCount      Int       @default(0)
+  createdAt         DateTime  @default(now())
+  disabledAt        DateTime?
+
+  deliveries WebhookDeliveryLog[]
+
+  @@index([active])
+  @@map("webhook_registrations")
+}
+
+model WebhookEvent {
+  id        String   @id @default(uuid())
+  type      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  deliveries WebhookDeliveryLog[]
+
+  @@index([type])
+  @@map("webhook_events")
+}
+
+model WebhookDeliveryLog {
+  id                  String   @id @default(uuid())
+  registrationId      String
+  eventId             String
+  eventType           String
+  attemptNumber       Int      @default(1)
+  status              String   // pending, success, failed, retrying, dead_letter
+  httpStatusCode      Int?
+  responseBodyPreview String?  @db.VarChar(500)
+  latencyMs           Int?
+  errorMessage        String?
+  attemptedAt         DateTime @default(now())
+
+  registration WebhookRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  event        WebhookEvent        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([registrationId, eventId])
+  @@index([status])
+  @@index([eventId])
+  @@map("webhook_delivery_logs")
+}
