@@ -19,7 +19,7 @@ export class ApiKeyProvider implements IApiKeyProvider {
   ) {}
 
   async validate(rawKey: string): Promise<ApiKeyContext | null> {
-    const keyHash = this.hashKey(rawKey);
+    const keyHash = await this.hashKey(rawKey);
     const prefix = rawKey.slice(0, 8);
 
     // Check Redis cache first (keyed by hash, not plaintext)
@@ -33,11 +33,29 @@ export class ApiKeyProvider implements IApiKeyProvider {
       where: { prefix, isActive: true },
     });
 
-    const record = candidates.find((c) => {
+    let record = candidates.find((c) => {
       const a = Buffer.from(c.keyHash, 'hex');
       const b = Buffer.from(keyHash, 'hex');
       return a.length === b.length && crypto.timingSafeEqual(a, b);
     });
+
+    // Fall back to legacy SHA-256 hash for keys created before the scrypt migration
+    if (!record) {
+      const legacyHash = this.hashKeyLegacy(rawKey);
+      record = candidates.find((c) => {
+        const a = Buffer.from(c.keyHash, 'hex');
+        const b = Buffer.from(legacyHash, 'hex');
+        return a.length === b.length && crypto.timingSafeEqual(a, b);
+      });
+
+      if (record) {
+        // Upgrade stored hash from SHA-256 to scrypt (fire-and-forget)
+        this.db.apiKey
+          .update({ where: { id: record.id }, data: { keyHash } })
+          .catch(() => {});
+      }
+    }
+
     if (!record) {
       return null;
     }
@@ -81,7 +99,30 @@ export class ApiKeyProvider implements IApiKeyProvider {
     await this.redis.del(`${API_KEY_CACHE_PREFIX}${keyHash}`);
   }
 
-  hashKey(rawKey: string): string {
+  private static readonly SCRYPT_SALT = 'odoo-api-key-v1';
+  private static readonly SCRYPT_KEYLEN = 64;
+  private static readonly SCRYPT_OPTIONS: crypto.ScryptOptions = {
+    N: 16384,
+    r: 8,
+    p: 1,
+  };
+
+  async hashKey(rawKey: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      crypto.scrypt(
+        rawKey,
+        ApiKeyProvider.SCRYPT_SALT,
+        ApiKeyProvider.SCRYPT_KEYLEN,
+        ApiKeyProvider.SCRYPT_OPTIONS,
+        (err, derivedKey) => {
+          if (err) reject(err);
+          else resolve(derivedKey.toString('hex'));
+        },
+      );
+    });
+  }
+
+  private hashKeyLegacy(rawKey: string): string {
     return crypto.createHash('sha256').update(rawKey).digest('hex');
   }
 }

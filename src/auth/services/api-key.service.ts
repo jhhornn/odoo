@@ -30,7 +30,7 @@ export class ApiKeyService {
     const rawBytes = crypto.randomBytes(32);
     const rawKey = API_KEY_PREFIX + rawBytes.toString('base64url');
     const prefix = rawKey.slice(0, 8);
-    const keyHash = this.keyProvider.hashKey(rawKey);
+    const keyHash = await this.keyProvider.hashKey(rawKey);
 
     const record = await this.db.apiKey.create({
       data: {

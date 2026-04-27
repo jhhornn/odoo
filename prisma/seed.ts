@@ -9,7 +9,9 @@ function generateApiKey(): { rawKey: string; prefix: string; keyHash: string } {
   const rawBytes = crypto.randomBytes(32);
   const rawKey = `octo_odoo_${rawBytes.toString('base64url')}`;
   const prefix = rawKey.substring(0, 8);
-  const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+  const keyHash = crypto
+    .scryptSync(rawKey, 'odoo-api-key-v1', 64, { N: 16384, r: 8, p: 1 })
+    .toString('hex');
   return { rawKey, prefix, keyHash };
 }
 
