@@ -19,7 +19,7 @@ jobs:
           node-version: 20
           cache: yarn
           registry-url: https://npm.pkg.github.com
-          scope: '@nestjs-odoo'
+          scope: '@jhhornn'
       - run: corepack enable
       - run: yarn install --frozen-lockfile
       - run: npm run build

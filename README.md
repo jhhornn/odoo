@@ -1,4 +1,4 @@
-# @nestjs-odoo/core
+# @jhhornn/nestjs-odoo
 
 Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC.
 
@@ -31,14 +31,14 @@ yarn start:dev          # http://localhost:3000
 ### As a Library
 
 ```bash
-yarn add @nestjs-odoo/core
+yarn add @jhhornn/nestjs-odoo
 ```
 
-The package is published privately to GitHub Packages and currently supports Node.js 20 or newer. Configure the `@nestjs-odoo`
+The package is published privately to GitHub Packages and currently supports Node.js 20 or newer. Configure the `@jhhornn`
 scope in your project-level `.npmrc` before installing:
 
 ```ini
-@nestjs-odoo:registry=https://npm.pkg.github.com
+@jhhornn:registry=https://npm.pkg.github.com
 ```
 
 ```typescript
@@ -50,7 +50,7 @@ import {
   PartnerModule,
   ProductModule,
   InvoiceModule,
-} from '@nestjs-odoo/core';
+} from '@jhhornn/nestjs-odoo';
 
 @Module({
   imports: [
@@ -130,7 +130,7 @@ Redis caching, and BullMQ webhooks.
 Applications using database-backed features must apply the packaged migrations:
 
 ```bash
-npx prisma migrate deploy --schema node_modules/@nestjs-odoo/core/prisma/schema.prisma
+npx prisma migrate deploy --schema node_modules/@jhhornn/nestjs-odoo/prisma/schema.prisma
 ```
 
 Applications using `WebhookModule` must configure BullMQ with the same Redis URL:

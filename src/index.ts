@@ -1,5 +1,5 @@
 /**
- * @nestjs-odoo/core
+ * @jhhornn/nestjs-odoo
  * Enterprise Odoo integration for NestJS.
  *
  * @packageDocumentation

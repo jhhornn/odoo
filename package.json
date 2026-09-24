@@ -1,5 +1,5 @@
 {
-  "name": "@nestjs-odoo/core",
+  "name": "@jhhornn/nestjs-odoo",
   "version": "0.1.0",
   "description": "Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC",
   "author": "jhhornn",
@@ -33,12 +33,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/octosoft-ai/nest-odoo-integration.git"
+    "url": "git+https://github.com/jhhornn/odoo.git"
   },
   "bugs": {
-    "url": "https://github.com/octosoft-ai/nest-odoo-integration/issues"
+    "url": "https://github.com/jhhornn/odoo/issues"
   },
-  "homepage": "https://github.com/octosoft-ai/nest-odoo-integration#readme",
+  "homepage": "https://github.com/jhhornn/odoo#readme",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "access": "restricted"

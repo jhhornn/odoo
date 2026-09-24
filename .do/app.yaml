@@ -47,7 +47,7 @@ services:
   - name: nest-odoo-integration
     environment_slug: node-js
     github:
-      repo: octosoft-ai/nest-odoo-integration
+      repo: jhhornn/odoo
       branch: main
       deploy_on_push: true
     source_dir: /

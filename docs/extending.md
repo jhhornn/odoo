@@ -1,6 +1,6 @@
 # Extending & Library Usage
 
-This guide covers using `@nestjs-odoo/core` as an **NPM library** in your own NestJS app, and extending it with custom Odoo model modules.
+This guide covers using `@jhhornn/nestjs-odoo` as an **NPM library** in your own NestJS app, and extending it with custom Odoo model modules.
 
 ---
 
@@ -23,7 +23,7 @@ This guide covers using `@nestjs-odoo/core` as an **NPM library** in your own Ne
 Install the package:
 
 ```bash
-yarn add @nestjs-odoo/core
+yarn add @jhhornn/nestjs-odoo
 ```
 
 Import the modules you need:
@@ -38,7 +38,7 @@ import {
   PartnerModule,
   ProductModule,
   InvoiceModule,
-} from '@nestjs-odoo/core';
+} from '@jhhornn/nestjs-odoo';
 
 @Module({
   imports: [
@@ -61,7 +61,7 @@ export class AppModule {}
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { PartnerService, CreatePartnerDto } from '@nestjs-odoo/core';
+import { PartnerService, CreatePartnerDto } from '@jhhornn/nestjs-odoo';
 
 @Injectable()
 export class MyCustomerService {
@@ -91,7 +91,7 @@ export class MyCustomerService {
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { ProductService } from '@nestjs-odoo/core';
+import { ProductService } from '@jhhornn/nestjs-odoo';
 
 @Injectable()
 export class CatalogService {
@@ -119,7 +119,7 @@ export class CatalogService {
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { InvoiceService } from '@nestjs-odoo/core';
+import { InvoiceService } from '@jhhornn/nestjs-odoo';
 
 @Injectable()
 export class BillingService {
@@ -149,7 +149,7 @@ For models not covered by built-in services:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { OdooService } from '@nestjs-odoo/core';
+import { OdooService } from '@jhhornn/nestjs-odoo';
 
 @Injectable()
 export class SaleOrderService {
@@ -173,7 +173,7 @@ For ad-hoc access to any Odoo model without creating a dedicated service:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { OdooServiceFactory } from '@nestjs-odoo/core';
+import { OdooServiceFactory } from '@jhhornn/nestjs-odoo';
 
 @Injectable()
 export class MyService {

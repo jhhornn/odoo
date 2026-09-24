@@ -44,7 +44,7 @@ yarn install
 ### As a Library
 
 ```bash
-yarn add @nestjs-odoo/core
+yarn add @jhhornn/nestjs-odoo
 ```
 
 Ensure your project has the required peer dependencies:

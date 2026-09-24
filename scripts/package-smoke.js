@@ -28,11 +28,11 @@ try {
   fs.mkdirSync(consumer);
   fs.writeFileSync(
     path.join(consumer, 'package.json'),
-    JSON.stringify({ private: true, dependencies: { '@nestjs-odoo/core': 'file:' + tarball } }, null, 2),
+    JSON.stringify({ private: true, dependencies: { '@jhhornn/nestjs-odoo': 'file:' + tarball } }, null, 2),
   );
   run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: consumer });
 
-  const library = require(path.join(consumer, 'node_modules/@nestjs-odoo/core'));
+  const library = require(path.join(consumer, 'node_modules/@jhhornn/nestjs-odoo'));
   const requiredExports = [
     'OdooModule', 'RedisModule', 'DatabaseModule', 'AuthModule', 'WebhookModule',
     'PartnerModule', 'ProductModule', 'InvoiceModule', 'PaymentModule', 'TaxModule',
@@ -42,7 +42,7 @@ try {
     assert.ok(library[name], 'Missing public export: ' + name);
   }
 
-  const packageRoot = path.join(consumer, 'node_modules/@nestjs-odoo/core');
+  const packageRoot = path.join(consumer, 'node_modules/@jhhornn/nestjs-odoo');
   assert.ok(fs.existsSync(path.join(packageRoot, 'dist/index.js')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'dist/index.d.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'prisma/schema.prisma')));
