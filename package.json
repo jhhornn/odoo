@@ -1,6 +1,6 @@
 {
   "name": "@jhhornn/nestjs-odoo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC",
   "author": "jhhornn",
   "license": "MIT",
