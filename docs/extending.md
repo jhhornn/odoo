@@ -317,6 +317,7 @@ export * from './sale-order/sale-order.service';
 | `ProductModule` | Module | Product management |
 | `InvoiceModule` | Module | Invoice/Bill management |
 | `PaymentModule` | Module | Payment registration |
+| `TaxModule` | Module | Tax lookup |
 | `AuthModule` | Module | API key authentication and rate limiting |
 | `WebhookModule` | Module | Webhook registry and delivery (global) |
 | `DatabaseModule` | Module | Prisma database service (global) |

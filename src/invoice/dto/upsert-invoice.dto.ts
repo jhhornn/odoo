@@ -14,7 +14,6 @@ import {
   Max,
   MaxLength,
   Matches,
-  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 

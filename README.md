@@ -34,7 +34,7 @@ yarn start:dev          # http://localhost:3000
 yarn add @nestjs-odoo/core
 ```
 
-The package is published to GitHub Packages, so configure the `@nestjs-odoo`
+The package is published privately to GitHub Packages and currently supports Node.js 20 or newer. Configure the `@nestjs-odoo`
 scope in your project-level `.npmrc` before installing:
 
 ```ini
@@ -121,3 +121,31 @@ Start the server and visit: **http://localhost:3000/api**
 ## License
 
 MIT
+## Package infrastructure
+
+This is the complete integration package. In addition to the Odoo client and domain
+modules, it includes API-key authentication, PostgreSQL persistence through Prisma,
+Redis caching, and BullMQ webhooks.
+
+Applications using database-backed features must apply the packaged migrations:
+
+```bash
+npx prisma migrate deploy --schema node_modules/@nestjs-odoo/core/prisma/schema.prisma
+```
+
+Applications using `WebhookModule` must configure BullMQ with the same Redis URL:
+
+```typescript
+BullModule.forRoot({
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
+})
+```
+
+Required environment variables are `ODOO_DATABASE`, `ODOO_USERNAME`,
+`ODOO_PASSWORD`, and `DATABASE_URL`. `ODOO_URL` and `REDIS_URL` have local
+defaults; production deployments should set both explicitly.
+
+## Publishing
+
+Releases are published automatically when a tag matching the package version is
+pushed. For example, version `0.1.0` must be tagged `v0.1.0`.
