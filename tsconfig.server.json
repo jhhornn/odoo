@@ -2,11 +2,11 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": "./src",
-    "outDir": "./dist",
+    "outDir": "./dist/server",
     "incremental": false
   },
   "files": [
-    "src/index.ts"
+    "src/main.ts"
   ],
   "exclude": [
     "node_modules",

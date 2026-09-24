@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { BaseOdooService } from '../common/services/base.service';
 import { OdooService } from '../odoo/odoo.service';
 import {
@@ -12,8 +12,6 @@ import { errRecordNotFound } from '../common/constants';
  */
 @Injectable()
 export class TaxService extends BaseOdooService {
-  private readonly logger = new Logger(TaxService.name);
-
   constructor(odooService: OdooService) {
     super(odooService, 'account.tax');
   }

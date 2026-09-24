@@ -14,28 +14,38 @@ import {
 export class CreatePaymentDto {
   @ApiProperty({
     example: 'EXT-PAY-001',
-    description: 'Unique payment identifier from your external system. Used for idempotency — if a payment with this ref already exists, the existing record is returned without creating a duplicate. Stored as `ref` in Odoo.',
+    description:
+      'Unique payment identifier from your external system. Used for idempotency — if a payment with this ref already exists, the existing record is returned without creating a duplicate. Stored as `ref` in Odoo.',
   })
   @IsString()
   @IsNotEmpty({ message: 'external_ref is required' })
   @MaxLength(255)
   external_ref: string;
 
-  @ApiPropertyOptional({ example: 201, description: 'Odoo invoice ID (account.move) this payment applies to. The invoice must be in "posted" state. Provide either this or invoice_external_ref — not both.' })
+  @ApiPropertyOptional({
+    example: 201,
+    description:
+      'Odoo invoice ID (account.move) this payment applies to. The invoice must be in "posted" state. Provide either this or invoice_external_ref — not both.',
+  })
   @IsNumber()
   @IsOptional()
   invoice_id?: number;
 
   @ApiPropertyOptional({
     example: 'EXT-INV-001',
-    description: 'External invoice reference. The API looks up the invoice by `ref` field in Odoo. Use this instead of invoice_id when you only know the external ref.',
+    description:
+      'External invoice reference. The API looks up the invoice by `ref` field in Odoo. Use this instead of invoice_id when you only know the external ref.',
   })
   @IsString()
   @IsOptional()
   @MaxLength(255)
   invoice_external_ref?: string;
 
-  @ApiProperty({ example: 5000.0, description: 'Payment amount in the invoice currency. Can be less than the invoice total for partial payments. Must be greater than zero.' })
+  @ApiProperty({
+    example: 5000.0,
+    description:
+      'Payment amount in the invoice currency. Can be less than the invoice total for partial payments. Must be greater than zero.',
+  })
   @IsNumber({}, { message: 'amount must be a number' })
   @Min(0.01, { message: 'Payment amount must be greater than zero' })
   amount: number;
@@ -54,7 +64,8 @@ export class CreatePaymentDto {
   @ApiPropertyOptional({
     example: 'inbound',
     enum: ['inbound', 'outbound'],
-    description: 'Payment type: inbound (receipt from customer) or outbound (payment to vendor). Auto-detected from invoice type if omitted.',
+    description:
+      'Payment type: inbound (receipt from customer) or outbound (payment to vendor). Auto-detected from invoice type if omitted.',
   })
   @IsEnum(['inbound', 'outbound'], {
     message: 'payment_type must be one of: inbound, outbound',
@@ -64,7 +75,8 @@ export class CreatePaymentDto {
 
   @ApiPropertyOptional({
     example: 1,
-    description: 'Payment journal ID (account.journal). Determines the bank/cash account used. If omitted, Odoo uses the default payment journal. Common journals: Bank, Cash, M-Pesa.',
+    description:
+      'Payment journal ID (account.journal). Determines the bank/cash account used. If omitted, Odoo uses the default payment journal. Common journals: Bank, Cash, M-Pesa.',
   })
   @IsNumber()
   @IsOptional()
@@ -83,14 +95,18 @@ export class CreatePaymentDto {
 
   @ApiPropertyOptional({
     example: 'MPESA-REF-123',
-    description: 'Transaction reference or memo (e.g. M-Pesa confirmation code, bank transfer reference, cheque number). Shown on payment receipts and bank reconciliation.',
+    description:
+      'Transaction reference or memo (e.g. M-Pesa confirmation code, bank transfer reference, cheque number). Shown on payment receipts and bank reconciliation.',
   })
   @IsString()
   @IsOptional()
   @MaxLength(255)
   ref?: string;
 
-  @ApiPropertyOptional({ description: 'Additional Odoo fields to set on the payment record. Common fields: `payment_method_id` (payment method), `writeoff_account_id` (write-off account for partial reconciliation).' })
+  @ApiPropertyOptional({
+    description:
+      'Additional Odoo fields to set on the payment record. Common fields: `payment_method_id` (payment method), `writeoff_account_id` (write-off account for partial reconciliation).',
+  })
   @IsObject()
   @IsOptional()
   extra_fields?: Record<string, any>;

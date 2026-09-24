@@ -6,10 +6,11 @@ import { OdooServiceFactory } from './factories/odoo-service.factory';
 import { OdooConfigService } from './infrastructure/config/odoo.config';
 import { OdooController } from './odoo.controller';
 import { OdooModelController } from './odoo-model.controller';
+import { RedisModule } from '../redis/redis.module';
 
 @Global()
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, RedisModule],
   providers: [
     OdooService,
     OdooConfigService,

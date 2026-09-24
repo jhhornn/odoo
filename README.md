@@ -1,4 +1,4 @@
-# @nestjs-odoo/core
+# @jhhornn/nestjs-odoo
 
 Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC.
 
@@ -31,17 +31,31 @@ yarn start:dev          # http://localhost:3000
 ### As a Library
 
 ```bash
-yarn add @nestjs-odoo/core
+yarn add @jhhornn/nestjs-odoo
+```
+
+The package is published privately to GitHub Packages and currently supports Node.js 20 or newer. Configure the `@jhhornn`
+scope in your project-level `.npmrc` before installing:
+
+```ini
+@jhhornn:registry=https://npm.pkg.github.com
 ```
 
 ```typescript
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { OdooModule, PartnerModule, ProductModule, InvoiceModule } from '@nestjs-odoo/core';
+import {
+  RedisModule,
+  OdooModule,
+  PartnerModule,
+  ProductModule,
+  InvoiceModule,
+} from '@jhhornn/nestjs-odoo';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    RedisModule,
     OdooModule,
     PartnerModule,
     ProductModule,
@@ -107,3 +121,31 @@ Start the server and visit: **http://localhost:3000/api**
 ## License
 
 MIT
+## Package infrastructure
+
+This is the complete integration package. In addition to the Odoo client and domain
+modules, it includes API-key authentication, PostgreSQL persistence through Prisma,
+Redis caching, and BullMQ webhooks.
+
+Applications using database-backed features must apply the packaged migrations:
+
+```bash
+npx prisma migrate deploy --schema node_modules/@jhhornn/nestjs-odoo/prisma/schema.prisma
+```
+
+Applications using `WebhookModule` must configure BullMQ with the same Redis URL:
+
+```typescript
+BullModule.forRoot({
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
+})
+```
+
+Required environment variables are `ODOO_DATABASE`, `ODOO_USERNAME`,
+`ODOO_PASSWORD`, and `DATABASE_URL`. `ODOO_URL` and `REDIS_URL` have local
+defaults; production deployments should set both explicitly.
+
+## Publishing
+
+Releases are published automatically when a tag matching the package version is
+pushed. For example, version `0.1.0` must be tagged `v0.1.0`.

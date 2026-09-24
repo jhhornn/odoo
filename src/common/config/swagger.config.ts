@@ -52,5 +52,4 @@ External systems authenticate via \`X-API-Key\` header. Each system has its own 
     },
     customSiteTitle: 'Odoo API Docs',
   });
-
 }

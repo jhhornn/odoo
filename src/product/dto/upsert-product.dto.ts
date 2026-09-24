@@ -14,7 +14,8 @@ import {
 export class UpsertProductDto {
   @ApiProperty({
     example: 'EXT-PLAN-001',
-    description: 'Unique identifier from your external system. Used for idempotent upsert — if a product with this ref exists, it will be updated instead of duplicated. Stored as `default_code` in Odoo.',
+    description:
+      'Unique identifier from your external system. Used for idempotent upsert — if a product with this ref exists, it will be updated instead of duplicated. Stored as `default_code` in Odoo.',
   })
   @IsString()
   @IsNotEmpty({ message: 'external_ref is required' })
@@ -32,7 +33,8 @@ export class UpsertProductDto {
 
   @ApiPropertyOptional({
     example: 'PLAN-PREM-001',
-    description: 'Internal reference/SKU used for barcode scanning, search, and inventory lookups. Separate from external_ref.',
+    description:
+      'Internal reference/SKU used for barcode scanning, search, and inventory lookups. Separate from external_ref.',
   })
   @IsString()
   @IsOptional()
@@ -52,26 +54,39 @@ export class UpsertProductDto {
   @IsOptional()
   type?: string;
 
-  @ApiPropertyOptional({ example: 5000.0, description: 'Selling price shown to customers. Used as the default unit price on sales orders and customer invoices.' })
+  @ApiPropertyOptional({
+    example: 5000.0,
+    description:
+      'Selling price shown to customers. Used as the default unit price on sales orders and customer invoices.',
+  })
   @IsNumber({}, { message: 'list_price must be a number' })
   @IsOptional()
   @Min(0, { message: 'list_price cannot be negative' })
   list_price?: number;
 
-  @ApiPropertyOptional({ example: 3000.0, description: 'Internal cost/purchase price. Used for margin calculations, vendor bills, and inventory valuation. Not visible to customers.' })
+  @ApiPropertyOptional({
+    example: 3000.0,
+    description:
+      'Internal cost/purchase price. Used for margin calculations, vendor bills, and inventory valuation. Not visible to customers.',
+  })
   @IsNumber({}, { message: 'standard_price must be a number' })
   @IsOptional()
   @Min(0, { message: 'standard_price cannot be negative' })
   standard_price?: number;
 
-  @ApiPropertyOptional({ example: 1, description: 'Product category ID in Odoo (product.category). Categories control default accounting accounts, routes, and reporting groups. Omit to use the default "All" category.' })
+  @ApiPropertyOptional({
+    example: 1,
+    description:
+      'Product category ID in Odoo (product.category). Categories control default accounting accounts, routes, and reporting groups. Omit to use the default "All" category.',
+  })
   @IsNumber()
   @IsOptional()
   categ_id?: number;
 
   @ApiPropertyOptional({
     example: true,
-    description: 'If true, this product can be sold to customers and will appear in sales orders and customer invoices. Set to false for internal-only or purchase-only items.',
+    description:
+      'If true, this product can be sold to customers and will appear in sales orders and customer invoices. Set to false for internal-only or purchase-only items.',
   })
   @IsBoolean()
   @IsOptional()
@@ -79,7 +94,8 @@ export class UpsertProductDto {
 
   @ApiPropertyOptional({
     example: true,
-    description: 'If true, this product can be purchased from vendors and will appear in purchase orders and vendor bills. Set to false for items you only sell (e.g. service plans).',
+    description:
+      'If true, this product can be purchased from vendors and will appear in purchase orders and vendor bills. Set to false for items you only sell (e.g. service plans).',
   })
   @IsBoolean()
   @IsOptional()
@@ -96,14 +112,16 @@ export class UpsertProductDto {
 
   @ApiPropertyOptional({
     example: true,
-    description: 'If false, the product is archived (soft-deleted) — hidden from searches and dropdowns but still exists in Odoo. Use this to disable a product without deleting historical records.',
+    description:
+      'If false, the product is archived (soft-deleted) — hidden from searches and dropdowns but still exists in Odoo. Use this to disable a product without deleting historical records.',
   })
   @IsBoolean()
   @IsOptional()
   active?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Additional Odoo fields to set directly on the product record. Use Odoo field names. For many2many fields like taxes, use the command format: `[[6, 0, [tax_id_1, tax_id_2]]]`.',
+    description:
+      'Additional Odoo fields to set directly on the product record. Use Odoo field names. For many2many fields like taxes, use the command format: `[[6, 0, [tax_id_1, tax_id_2]]]`.',
     example: { taxes_id: [[6, 0, [1]]] },
   })
   @IsObject()
