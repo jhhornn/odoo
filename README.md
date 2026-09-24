@@ -34,14 +34,28 @@ yarn start:dev          # http://localhost:3000
 yarn add @nestjs-odoo/core
 ```
 
+The package is published to GitHub Packages, so configure the `@nestjs-odoo`
+scope in your project-level `.npmrc` before installing:
+
+```ini
+@nestjs-odoo:registry=https://npm.pkg.github.com
+```
+
 ```typescript
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { OdooModule, PartnerModule, ProductModule, InvoiceModule } from '@nestjs-odoo/core';
+import {
+  RedisModule,
+  OdooModule,
+  PartnerModule,
+  ProductModule,
+  InvoiceModule,
+} from '@nestjs-odoo/core';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    RedisModule,
     OdooModule,
     PartnerModule,
     ProductModule,

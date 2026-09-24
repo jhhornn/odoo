@@ -34,6 +34,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import {
   OdooModule,
+  RedisModule,
   PartnerModule,
   ProductModule,
   InvoiceModule,
@@ -42,6 +43,7 @@ import {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    RedisModule,
     OdooModule,
     PartnerModule,
     ProductModule,

@@ -10,6 +10,7 @@ export { OdooModule } from './odoo/odoo.module';
 export { PartnerModule } from './partner/partner.module';
 export { ProductModule } from './product/product.module';
 export { InvoiceModule } from './invoice/invoice.module';
+export { RedisModule } from './redis/redis.module';
 
 // Services
 export { OdooService } from './odoo/odoo.service';
