@@ -1,6 +1,6 @@
 {
   "name": "@jhhornn/nestjs-odoo",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC",
   "author": "jhhornn",
   "license": "MIT",
@@ -40,8 +40,8 @@
   },
   "homepage": "https://github.com/jhhornn/odoo#readme",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   },
   "scripts": {
     "prebuild": "node scripts/clean.js && node node_modules/prisma/build/index.js generate",
