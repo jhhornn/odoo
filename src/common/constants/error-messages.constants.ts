@@ -57,3 +57,15 @@ export const errOdooRpcFailed = (model: string, method: string, msg: string) =>
 export const errEnvVarMissing = (key: string) =>
   `Environment variable '${key}' is missing!`;
 export const errOdooConfigRequired = (key: string) => `${key} is required`;
+export const errOdooTimeout = (ms: number) =>
+  `Odoo did not respond within ${ms}ms`;
+export const errOdooUnreachable = (msg: string) =>
+  `Could not reach Odoo: ${msg}`;
+export const errOdooUrlInvalid = (url: string) =>
+  `ODOO_URL must be an http(s) URL, got '${url}'`;
+
+// ── Generic Odoo API error messages ─────────────────────────────────
+export const ERR_INVALID_MODEL_NAME = 'Invalid Odoo model name';
+export const errModelNotAllowed = (model: string) =>
+  `Model '${model}' is not exposed by this API`;
+export const ERR_INVALID_LIMIT = 'limit must be a positive integer';

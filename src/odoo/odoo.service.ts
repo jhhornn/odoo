@@ -1,12 +1,20 @@
-import { Injectable, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, HttpStatus, Logger, Optional } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
-import { XmlRpcClientFactory } from './factories/xml-rpc-client.factory';
+import {
+  XmlRpcClientFactory,
+  OdooTimeoutError,
+} from './factories/xml-rpc-client.factory';
 import { IOdooClient } from './interfaces/odoo-client.interface';
 import {
   OdooException,
   OdooErrorCode,
 } from './infrastructure/exceptions/odoo.exception';
+import {
+  summarizeOdooFault,
+  isConnectionError,
+  isAccessDenied,
+} from './infrastructure/exceptions/odoo-fault.util';
 import { SearchDomain, SearchOptions, ReadOptions } from './interfaces';
 import { OdooConfigService } from './infrastructure/config/odoo.config';
 import {
@@ -14,6 +22,7 @@ import {
   ODOO_CACHE_TTL,
   ERR_AUTH_FAILED_CHECK_CREDENTIALS,
   errOdooRpcFailed,
+  errOdooUnreachable,
 } from '../common/constants';
 
 /**
@@ -41,25 +50,63 @@ export class OdooService {
   private commonClient: IOdooClient;
   private objectClient: IOdooClient;
   private uid: number | null = null;
+  private authPromise: Promise<number> | null = null;
 
   constructor(
     private config: OdooConfigService,
     private clientFactory: XmlRpcClientFactory,
-    @InjectRedis() private readonly redis: Redis,
+    @Optional() @InjectRedis() private readonly redis?: Redis,
   ) {
     this.initializeClients();
   }
 
   private initializeClients(): void {
+    const options = { timeoutMs: this.config.timeoutMs };
     this.commonClient = this.clientFactory.createClient(
       this.config.url,
       '/xmlrpc/2/common',
+      options,
     );
     this.objectClient = this.clientFactory.createClient(
       this.config.url,
       '/xmlrpc/2/object',
+      options,
     );
-    this.logger.log(`Connected to Odoo at ${this.config.url}`);
+    // Log the origin only: the configured URL may carry credentials
+    this.logger.log(
+      `Odoo client configured for ${new URL(this.config.url).origin}`,
+    );
+  }
+
+  /** Convert the library's domain format into Odoo's tuple format */
+  private toOdooDomain(domain: SearchDomain[]): any[] {
+    return domain.map((d) =>
+      typeof d === 'string' ? d : [d.field, d.operator, d.value],
+    );
+  }
+
+  /** Map a transport or Odoo error to a client-safe OdooException */
+  private toOdooException(error: any, context: string): OdooException {
+    if (error instanceof OdooException) return error;
+    if (error instanceof OdooTimeoutError) {
+      return new OdooException(
+        OdooErrorCode.CONNECTION_ERROR,
+        error.message,
+        HttpStatus.GATEWAY_TIMEOUT,
+      );
+    }
+    if (isConnectionError(error)) {
+      return new OdooException(
+        OdooErrorCode.CONNECTION_ERROR,
+        errOdooUnreachable(error.code),
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+    return new OdooException(
+      OdooErrorCode.API_ERROR,
+      `${context}${summarizeOdooFault(error?.message)}`,
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   /**
@@ -70,34 +117,46 @@ export class OdooService {
    */
   private async authenticate(): Promise<number> {
     if (this.uid) return this.uid;
+    // Share one in-flight login between concurrent callers
+    this.authPromise ??= this.login().finally(() => {
+      this.authPromise = null;
+    });
+    return this.authPromise;
+  }
 
+  private async login(): Promise<number> {
+    let uid: number | false;
     try {
-      const uid = await this.commonClient.methodCall('authenticate', [
+      uid = await this.commonClient.methodCall('authenticate', [
         this.config.database,
         this.config.username,
         this.config.password,
         {},
       ]);
-
-      if (!uid) {
+    } catch (error: any) {
+      this.logger.error(`Auth error: ${error.message}`);
+      const exception = this.toOdooException(error, '');
+      if (exception.code === OdooErrorCode.API_ERROR) {
         throw new OdooException(
-          OdooErrorCode.INVALID_CREDENTIALS,
+          OdooErrorCode.AUTHENTICATION_FAILED,
           ERR_AUTH_FAILED_CHECK_CREDENTIALS,
           HttpStatus.UNAUTHORIZED,
         );
       }
+      throw exception;
+    }
 
-      this.uid = uid;
-      this.logger.log(`Authenticated successfully (UID: ${uid})`);
-      return uid;
-    } catch (error: any) {
-      this.logger.error(`Auth error: ${error.message}`);
+    if (!uid) {
       throw new OdooException(
-        OdooErrorCode.AUTHENTICATION_FAILED,
-        error.message,
+        OdooErrorCode.INVALID_CREDENTIALS,
+        ERR_AUTH_FAILED_CHECK_CREDENTIALS,
         HttpStatus.UNAUTHORIZED,
       );
     }
+
+    this.uid = uid;
+    this.logger.log(`Authenticated successfully (UID: ${uid})`);
+    return uid;
   }
 
   /**
@@ -146,12 +205,11 @@ export class OdooService {
         );
         return null;
       }
+      // Credentials changed since login: force re-authentication next call
+      if (isAccessDenied(error)) this.uid = null;
+      // Full fault (may include a traceback) goes to logs only
       this.logger.error(`RPC Error [${model}.${method}]: ${error.message}`);
-      throw new OdooException(
-        OdooErrorCode.API_ERROR,
-        errOdooRpcFailed(model, method, error.message),
-        HttpStatus.BAD_REQUEST,
-      );
+      throw this.toOdooException(error, errOdooRpcFailed(model, method, ''));
     }
   }
 
@@ -177,9 +235,7 @@ export class OdooService {
     domain: SearchDomain[] = [],
     options: SearchOptions = {},
   ): Promise<number[]> {
-    const searchDomain = domain.map((d) =>
-      typeof d === 'string' ? d : [d.field, d.operator, d.value],
-    );
+    const searchDomain = this.toOdooDomain(domain);
     return this.executeKw(model, 'search', [searchDomain], options);
   }
 
@@ -234,9 +290,7 @@ export class OdooService {
     domain: SearchDomain[] = [],
     options: SearchOptions & ReadOptions = {},
   ): Promise<any[]> {
-    const searchDomain = domain.map((d) =>
-      typeof d === 'string' ? d : [d.field, d.operator, d.value],
-    );
+    const searchDomain = this.toOdooDomain(domain);
     const sanitizedOptions = { ...options };
     if (sanitizedOptions.limit != null) {
       const n = Number(sanitizedOptions.limit);
@@ -262,6 +316,10 @@ export class OdooService {
    * @param domain - Search criteria
    * @param options - Query options
    * @param ttl - Cache TTL in seconds (default 60)
+   *
+   * @remarks
+   * Falls back to an uncached read when Redis is not registered
+   * (`OdooModule.forRoot({ cache: false })`) or is unavailable.
    */
   async cachedSearchRead(
     model: string,
@@ -271,14 +329,22 @@ export class OdooService {
   ): Promise<any[]> {
     const cacheKey = `${ODOO_CACHE_PREFIX}${model}:${JSON.stringify(domain)}:${JSON.stringify(options)}`;
 
-    const cached = await this.redis.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
+    if (!this.redis) return this.searchRead(model, domain, options);
+
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) return JSON.parse(cached);
+    } catch (error: any) {
+      this.logger.warn(`Cache read failed for ${model}: ${error.message}`);
     }
 
     const results = await this.searchRead(model, domain, options);
 
-    await this.redis.set(cacheKey, JSON.stringify(results), 'EX', ttl);
+    try {
+      await this.redis.set(cacheKey, JSON.stringify(results), 'EX', ttl);
+    } catch (error: any) {
+      this.logger.warn(`Cache write failed for ${model}: ${error.message}`);
+    }
 
     return results;
   }
@@ -288,6 +354,7 @@ export class OdooService {
    * Call after create/write/unlink operations.
    */
   async invalidateModelCache(model: string): Promise<void> {
+    if (!this.redis) return;
     const pattern = `${ODOO_CACHE_PREFIX}${model}:*`;
     let cursor = '0';
     do {
@@ -403,9 +470,7 @@ export class OdooService {
     model: string,
     domain: SearchDomain[] = [],
   ): Promise<number> {
-    const searchDomain = domain.map((d) =>
-      typeof d === 'string' ? d : [d.field, d.operator, d.value],
-    );
+    const searchDomain = this.toOdooDomain(domain);
     return this.executeKw(model, 'search_count', [searchDomain]);
   }
 }

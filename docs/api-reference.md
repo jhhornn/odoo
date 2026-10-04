@@ -67,6 +67,10 @@ All responses are wrapped in a standard envelope:
 
 Dynamic operations for **any** Odoo model. The model name uses dot notation (e.g. `res.partner`, `product.product`).
 
+> **Opt-in since v0.2.0.** These routes are only registered when the app imports
+> `OdooApiModule.register({ allowedModels, requiredScopes })`. They require an API key;
+> models outside `allowedModels` return `403`, and malformed model names return `400`.
+
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/odoo/:model/search` | Search records, returns array of IDs |

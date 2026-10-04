@@ -1,6 +1,6 @@
 {
   "name": "@jhhornn/nestjs-odoo",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Enterprise-grade NestJS module for Odoo ERP integration via XML-RPC",
   "author": "jhhornn",
   "license": "MIT",
@@ -19,6 +19,7 @@
     "prisma/schema.prisma",
     "prisma/migrations",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "keywords": [

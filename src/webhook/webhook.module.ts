@@ -6,10 +6,12 @@ import { WebhookDeliveryProcessor } from './processors/webhook-delivery.processo
 import { WebhookController } from './webhook.controller';
 import { WebhookSelfServiceController } from './webhook-self-service.controller';
 import { WEBHOOK_QUEUE } from '../common/constants';
+import { AuthModule } from '../auth/auth.module';
 
 @Global()
 @Module({
   imports: [
+    AuthModule,
     BullModule.registerQueue({
       name: WEBHOOK_QUEUE,
       defaultJobOptions: {

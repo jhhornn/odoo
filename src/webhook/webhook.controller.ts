@@ -9,20 +9,16 @@ import {
   Query,
   ParseUUIDPipe,
   Logger,
-  UseGuards,
   ParseIntPipe,
   DefaultValuePipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { WebhookRegistryService } from './services/webhook-registry.service';
 import { RegisterWebhookDto, UpdateWebhookDto } from './dto';
-import { ScopeGuard } from '../auth/guards';
-import { RequireScopes } from '../auth/decorators';
+import { ApiKeyAuth } from '../auth/decorators';
 
 @ApiTags('Webhooks')
-@ApiBearerAuth()
-@RequireScopes('admin')
-@UseGuards(ScopeGuard)
+@ApiKeyAuth('admin')
 @Controller('admin/webhooks')
 export class WebhookController {
   private readonly logger = new Logger(WebhookController.name);

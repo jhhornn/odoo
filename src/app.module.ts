@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { OdooModule } from './odoo/odoo.module';
+import { OdooApiModule } from './odoo/odoo-api.module';
 import { PartnerModule } from './partner/partner.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { ProductModule } from './product/product.module';
@@ -33,6 +34,11 @@ import { WebhookModule } from './webhook/webhook.module';
     DatabaseModule,
     RedisModule,
     OdooModule,
+    OdooApiModule.register({
+      allowedModels: process.env.ODOO_API_ALLOWED_MODELS?.split(',')
+        .map((m) => m.trim())
+        .filter(Boolean),
+    }),
     AuthModule,
     WebhookModule,
     PartnerModule,

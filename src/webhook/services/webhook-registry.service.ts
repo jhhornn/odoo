@@ -7,10 +7,12 @@ import {
   Inject,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
-import * as net from 'net';
 import { DatabaseService } from '../../common/database/database.service';
 import { encrypt, decrypt } from '../../common/crypto/encryption.util';
-import { isPrivateIp } from '../../common/security/ssrf.util';
+import {
+  assertPublicHostname,
+  isPrivateIp,
+} from '../../common/security/ssrf.util';
 import { WebhookEmitterService } from './webhook-emitter.service';
 import {
   LOG_WEBHOOK_REGISTERED,
@@ -46,7 +48,7 @@ export class WebhookRegistryService {
     signingSecret: string;
     eventTypes: string[];
   }> {
-    this.validateUrl(data.url);
+    await this.validateUrl(data.url);
     await this.validateServiceName(data.serviceName);
 
     const signingSecret = crypto.randomBytes(32).toString('hex');
@@ -124,7 +126,7 @@ export class WebhookRegistryService {
     id: string,
     data: { url?: string; eventTypes?: string[]; active?: boolean },
   ) {
-    if (data.url) this.validateUrl(data.url);
+    if (data.url) await this.validateUrl(data.url);
 
     const updated = await this.db.webhookRegistration.update({
       where: { id },
@@ -304,7 +306,7 @@ export class WebhookRegistryService {
     return this.getDeliveryHistory(registrationId, limit);
   }
 
-  private validateUrl(url: string): void {
+  private async validateUrl(url: string): Promise<void> {
     let parsed: URL;
     try {
       parsed = new URL(url);
@@ -316,16 +318,18 @@ export class WebhookRegistryService {
       throw new BadRequestException(ERR_WEBHOOK_URL_MUST_USE_HTTPS);
     }
 
-    // SSRF prevention: reject private/internal IP ranges
-    const hostname = parsed.hostname;
-    if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '::1' ||
-      hostname === '0.0.0.0' ||
-      (net.isIP(hostname) && isPrivateIp(hostname))
-    ) {
+    // SSRF prevention: reject private/internal addresses and credentials in URLs.
+    // Hostnames are re-checked against DNS at delivery time.
+    if (isPrivateIp(parsed.hostname) || parsed.username || parsed.password) {
       throw new BadRequestException(ERR_WEBHOOK_URL_PRIVATE_ADDRESS);
+    }
+    try {
+      await assertPublicHostname(parsed.hostname);
+    } catch (error: any) {
+      // Unresolvable hosts are allowed here; delivery retries resolution
+      if (!/DNS resolution failed/.test(error.message)) {
+        throw new BadRequestException(ERR_WEBHOOK_URL_PRIVATE_ADDRESS);
+      }
     }
   }
 

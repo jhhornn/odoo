@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  Optional,
+} from '@nestjs/common';
 import { OdooService } from '../odoo/odoo.service';
 import { WebhookEmitterService } from '../webhook/services/webhook-emitter.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -18,21 +23,27 @@ export class PaymentService {
 
   constructor(
     private readonly odooService: OdooService,
-    private readonly webhookEmitter: WebhookEmitterService,
+    @Optional() private readonly webhookEmitter?: WebhookEmitterService,
   ) {}
 
-  async createPayment(dto: CreatePaymentDto, context: ApiKeyContext) {
+  async createPayment(
+    dto: CreatePaymentDto,
+    context?: Pick<ApiKeyContext, 'systemName'>,
+  ) {
     const result = await this.executeCreate(dto);
-    await this.webhookEmitter.emit(
-      context.systemName,
-      result.created ? 'payment.created' : 'payment.exists',
-      {
-        model: 'account.payment',
-        externalRef: dto.external_ref,
-        paymentId: result.paymentId,
-        ...result,
-      },
-    );
+    // Webhooks fire only when WebhookModule is registered and a caller is known
+    if (this.webhookEmitter && context) {
+      await this.webhookEmitter.emit(
+        context.systemName,
+        result.created ? 'payment.created' : 'payment.exists',
+        {
+          model: 'account.payment',
+          externalRef: dto.external_ref,
+          paymentId: result.paymentId,
+          ...result,
+        },
+      );
+    }
     return result;
   }
 

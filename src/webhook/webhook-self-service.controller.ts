@@ -7,9 +7,9 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiSecurity } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { WebhookRegistryService } from './services/webhook-registry.service';
-import { GetApiKeyContext } from '../auth/decorators';
+import { ApiKeyAuth, GetApiKeyContext } from '../auth/decorators';
 import { ApiKeyContext } from '../auth/interfaces';
 
 /**
@@ -19,7 +19,7 @@ import { ApiKeyContext } from '../auth/interfaces';
  * No admin scope required.
  */
 @ApiTags('Webhooks (Self-Service)')
-@ApiSecurity('X-API-Key')
+@ApiKeyAuth()
 @Controller('webhooks')
 export class WebhookSelfServiceController {
   constructor(private readonly registry: WebhookRegistryService) {}

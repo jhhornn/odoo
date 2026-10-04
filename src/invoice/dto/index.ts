@@ -5,6 +5,8 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -65,6 +67,8 @@ export class FilterInvoiceDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(1)
+  @Max(1000)
   limit?: number;
 
   @ApiPropertyOptional({ example: 0 })
@@ -84,3 +88,4 @@ export class FilterInvoiceDto {
   @IsString({ each: true })
   fields?: string[];
 }
+export * from './upsert-invoice.dto';

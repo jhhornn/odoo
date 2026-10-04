@@ -242,23 +242,25 @@ export class CreateSaleOrderDto {
 
 ```typescript
 // src/sale-order/sale-order.controller.ts
-import { Controller, Get, Param, Put, Query } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { ApiKeyAuth, ParseLimitPipe } from '@jhhornn/nestjs-odoo';
 import { SaleOrderService } from './sale-order.service';
 
 @ApiTags('Sale Orders')
+@ApiKeyAuth('sales') // API key + rate limit + required scope
 @Controller('sale-orders')
 export class SaleOrderController {
   constructor(private readonly saleOrderService: SaleOrderService) {}
 
   @Get('confirmed')
-  findConfirmed(@Query('limit') limit?: number) {
+  findConfirmed(@Query('limit', ParseLimitPipe) limit?: number) {
     return this.saleOrderService.findConfirmedOrders(limit);
   }
 
   @Put(':id/confirm')
-  confirm(@Param('id') id: number) {
-    return this.saleOrderService.confirmOrder(+id);
+  confirm(@Param('id', ParseIntPipe) id: number) {
+    return this.saleOrderService.confirmOrder(id);
   }
 }
 ```
@@ -268,12 +270,14 @@ export class SaleOrderController {
 ```typescript
 // src/sale-order/sale-order.module.ts
 import { Module } from '@nestjs/common';
-import { OdooModule } from '../odoo/odoo.module';
+import { AuthModule } from '@jhhornn/nestjs-odoo';
 import { SaleOrderService } from './sale-order.service';
 import { SaleOrderController } from './sale-order.controller';
 
+// OdooService comes from the global OdooModule in AppModule.
+// AuthModule provides the guards behind @ApiKeyAuth().
 @Module({
-  imports: [OdooModule],
+  imports: [AuthModule],
   controllers: [SaleOrderController],
   providers: [SaleOrderService],
   exports: [SaleOrderService],
@@ -312,7 +316,9 @@ export * from './sale-order/sale-order.service';
 
 | Export | Type | Description |
 |---|---|---|
-| `OdooModule` | Module | Core module (global) |
+| `OdooModule` | Module | Core client (global). `forRoot()` / `forRootAsync()` for explicit config |
+| `OdooApiModule` | Module | Opt-in generic `/odoo/*` routes: `register({ allowedModels, requiredScopes })` |
+| `OdooServicesModule` | Module | Domain services without HTTP routes or PostgreSQL |
 | `PartnerModule` | Module | Partner/Contact management |
 | `ProductModule` | Module | Product management |
 | `InvoiceModule` | Module | Invoice/Bill management |
@@ -335,6 +341,10 @@ export * from './sale-order/sale-order.service';
 | `OdooConfigService` | Service | Odoo connection configuration |
 | `OdooServiceFactory` | Factory | Dynamic service creation for any model |
 | `XmlRpcClientFactory` | Factory | XML-RPC client creation |
+| `ApiKeyAuth` | Decorator | Protect a controller/route with API key, rate limit and scopes |
+| `Public` | Decorator | Exempt a route from a global `ApiKeyGuard` |
+| `ParseLimitPipe` | Pipe | Parse and clamp `limit` query params to `MAX_PAGE_LIMIT` |
+| `verifySignature` | Function | Verify incoming webhook signatures |
 | `OdooException` | Exception | Typed Odoo errors |
 | `OdooErrorCode` | Enum | Error code constants |
 | All DTOs | Classes | `UpsertPartnerDto`, `UpsertProductDto`, `UpsertInvoiceDto`, `CreatePaymentDto`, etc. |

@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { PartnerService } from './partner.service';
 import { PartnerController } from './partner.controller';
-import { OdooModule } from '../odoo/odoo.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [OdooModule, AuthModule],
+  // OdooService comes from the global OdooModule registered by the app
+  imports: [AuthModule],
   providers: [PartnerService],
   controllers: [PartnerController],
   exports: [PartnerService],

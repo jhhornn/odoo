@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { BaseOdooService } from '../common/services/base.service';
 import { OdooService } from '../odoo/odoo.service';
 import { WebhookEmitterService } from '../webhook/services/webhook-emitter.service';
@@ -26,7 +26,7 @@ export class PartnerService extends BaseOdooService {
 
   constructor(
     odooService: OdooService,
-    private readonly webhookEmitter: WebhookEmitterService,
+    @Optional() private readonly webhookEmitter?: WebhookEmitterService,
   ) {
     super(odooService, 'res.partner');
   }
@@ -231,18 +231,24 @@ export class PartnerService extends BaseOdooService {
    * Upsert a customer/vendor from an external system.
    * Checks existence by external_ref (Odoo `ref` field), creates or updates accordingly.
    */
-  async upsert(dto: UpsertPartnerDto, context: ApiKeyContext) {
+  async upsert(
+    dto: UpsertPartnerDto,
+    context?: Pick<ApiKeyContext, 'systemName'>,
+  ) {
     const result = await this.executeUpsert(dto);
-    await this.webhookEmitter.emit(
-      context.systemName,
-      result.created ? 'partner.created' : 'partner.updated',
-      {
-        model: 'res.partner',
-        externalRef: dto.external_ref,
-        partnerId: result.partnerId,
-        ...result,
-      },
-    );
+    // Webhooks fire only when WebhookModule is registered and a caller is known
+    if (this.webhookEmitter && context) {
+      await this.webhookEmitter.emit(
+        context.systemName,
+        result.created ? 'partner.created' : 'partner.updated',
+        {
+          model: 'res.partner',
+          externalRef: dto.external_ref,
+          partnerId: result.partnerId,
+          ...result,
+        },
+      );
+    }
     return result;
   }
 

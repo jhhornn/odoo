@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   HttpException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
@@ -15,6 +16,9 @@ import {
   LOG_RATE_LIMIT_EXCEEDED,
   ERR_TOO_MANY_REQUESTS,
 } from '../../common/constants';
+
+/** Marks a request already counted, so stacked guard instances count it once */
+const RATE_LIMIT_APPLIED = Symbol('odooRateLimitApplied');
 
 interface TierConfig {
   windowMs: number;
@@ -28,25 +32,31 @@ export class RateLimitGuard implements CanActivate {
 
   constructor(
     @InjectRedis() private readonly redis: Redis,
-    private readonly config: ConfigService,
+    // Optional: guards are instantiated in each host module, which may not see ConfigService
+    @Optional() private readonly config?: ConfigService,
   ) {
-    // TODO: Load tier configs from env or database for production flexibility
     this.tiers = {
       default: {
         windowMs: RATE_LIMIT_WINDOW_MS,
-        maxRequests: parseInt(
-          this.config.get(
-            'RATE_LIMIT_DEFAULT_MAX',
-            String(RATE_LIMIT_DEFAULT_MAX),
-          ),
-          10,
+        maxRequests: this.readLimit(
+          'RATE_LIMIT_DEFAULT_MAX',
+          RATE_LIMIT_DEFAULT_MAX,
         ),
       },
       premium: {
         windowMs: RATE_LIMIT_WINDOW_MS,
-        maxRequests: RATE_LIMIT_PREMIUM_MAX,
+        maxRequests: this.readLimit(
+          'RATE_LIMIT_PREMIUM_MAX',
+          RATE_LIMIT_PREMIUM_MAX,
+        ),
       },
     };
+  }
+
+  private readLimit(key: string, fallback: number): number {
+    const raw = this.config?.get<string>(key) ?? process.env[key];
+    const n = parseInt(raw ?? '', 10);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -54,7 +64,8 @@ export class RateLimitGuard implements CanActivate {
     const apiKeyContext = request.apiKeyContext;
 
     // If no API key context (e.g. public endpoint), skip rate limiting
-    if (!apiKeyContext) return true;
+    if (!apiKeyContext || request[RATE_LIMIT_APPLIED]) return true;
+    request[RATE_LIMIT_APPLIED] = true;
 
     const tier =
       this.tiers[apiKeyContext.rateLimitTier] ?? this.tiers['default'];

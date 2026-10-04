@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseIntPipe,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,20 +18,23 @@ import {
   ApiBody,
   ApiParam,
   ApiQuery,
-  ApiSecurity,
 } from '@nestjs/swagger';
 import { OdooService } from './odoo.service';
+import { ApiKeyAuth } from '../auth/decorators';
+import { OdooModelAccessGuard } from './guards/odoo-model-access.guard';
 import {
   SearchReadDto,
   CreateRecordDto,
   UpdateRecordDto,
   SearchDto,
 } from './dto';
+import { ParseLimitPipe } from '../common/pipes/parse-limit.pipe';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
 import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
 
 @ApiTags('Odoo Generic')
-@ApiSecurity('X-API-Key')
+@ApiKeyAuth()
+@UseGuards(OdooModelAccessGuard)
 @ApiCommonErrorResponses()
 @Controller('odoo')
 export class OdooController {
@@ -109,7 +113,7 @@ export class OdooController {
   async nameSearch(
     @Param('model') model: string,
     @Query('name') name?: string,
-    @Query('limit') limit?: number,
+    @Query('limit', ParseLimitPipe) limit?: number,
   ) {
     return this.odooService.nameSearch(model, name || '', { limit });
   }

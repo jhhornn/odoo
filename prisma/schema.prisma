@@ -15,8 +15,8 @@ datasource db {
 
 model ApiKey {
   id             String    @id @default(uuid())
-  prefix         String    @db.VarChar(8)     // first 8 chars for fast lookup
-  keyHash        String    @unique             // SHA-256 hash of the full key
+  prefix         String    @db.VarChar(8)     // 8 random chars after "octo_odoo_", for lookup
+  keyHash        String    @unique             // scrypt hash of the full key
   systemName     String    @unique
   scopes         String[]  @default([])        // permissions, e.g. ["read", "write"]
   rateLimitTier  String    @default("default") // maps to config for rate limiting
