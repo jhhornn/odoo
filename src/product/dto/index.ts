@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  Max,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export * from './create-product.dto';
@@ -40,6 +47,8 @@ export class FilterProductDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(1)
+  @Max(1000)
   limit?: number;
 
   @ApiPropertyOptional({ example: 0 })
@@ -59,3 +68,4 @@ export class FilterProductDto {
   @IsString({ each: true })
   fields?: string[];
 }
+export * from './upsert-product.dto';

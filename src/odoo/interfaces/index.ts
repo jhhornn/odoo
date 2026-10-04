@@ -34,6 +34,7 @@ export interface ReadOptions {
 }
 
 export * from './odoo-client.interface';
+export * from './odoo-module-options.interface';
 
 export enum ResponseMessage {
   SUCCESS = 'Request Successful!',

@@ -8,7 +8,8 @@ const prisma = new PrismaClient();
 function generateApiKey(): { rawKey: string; prefix: string; keyHash: string } {
   const rawBytes = crypto.randomBytes(32);
   const rawKey = `octo_odoo_${rawBytes.toString('base64url')}`;
-  const prefix = rawKey.substring(0, 8);
+  // Lookup identifier: first 8 random characters after the `octo_odoo_` marker
+  const prefix = rawKey.substring(10, 18);
   const keyHash = crypto
     .scryptSync(rawKey, 'odoo-api-key-v1', 64, { N: 16384, r: 8, p: 1 })
     .toString('hex');

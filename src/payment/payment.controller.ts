@@ -1,20 +1,14 @@
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBody,
-  ApiHeader,
-  ApiSecurity,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBody, ApiHeader } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
 import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
-import { GetApiKeyContext } from '../auth/decorators';
+import { ApiKeyAuth, GetApiKeyContext } from '../auth/decorators';
 import { ApiKeyContext } from '../auth/interfaces';
 
 @ApiTags('Payments')
-@ApiSecurity('X-API-Key')
+@ApiKeyAuth()
 @ApiCommonErrorResponses()
 @Controller('payments')
 export class PaymentController {

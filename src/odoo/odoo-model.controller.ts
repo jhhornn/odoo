@@ -6,6 +6,9 @@ import {
   Query,
   Param,
   Logger,
+  Inject,
+  Optional,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -13,19 +16,35 @@ import {
   ApiQuery,
   ApiResponse,
   ApiTags,
-  ApiSecurity,
 } from '@nestjs/swagger';
 import { OdooService } from './odoo.service';
+import { ODOO_API_MODULE_OPTIONS } from '../common/constants';
+import { OdooApiModuleOptions } from './interfaces/odoo-module-options.interface';
+import { ApiKeyAuth } from '../auth/decorators';
+import { OdooModelAccessGuard } from './guards/odoo-model-access.guard';
 import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
 
 @ApiTags('Odoo Model Metadata')
-@ApiSecurity('X-API-Key')
+@ApiKeyAuth()
+@UseGuards(OdooModelAccessGuard)
 @ApiCommonErrorResponses()
 @Controller('odoo/models')
 export class OdooModelController {
   private readonly logger = new Logger(OdooModelController.name);
 
-  constructor(private readonly odooService: OdooService) {}
+  constructor(
+    private readonly odooService: OdooService,
+    @Optional()
+    @Inject(ODOO_API_MODULE_OPTIONS)
+    private readonly options: OdooApiModuleOptions = {},
+  ) {}
+
+  /** Restrict model listings to the configured allowlist, if any */
+  private allowlistDomain(): any[] {
+    return this.options.allowedModels
+      ? [['model', 'in', this.options.allowedModels]]
+      : [];
+  }
 
   @Get('info')
   @ApiOperation({
@@ -57,11 +76,6 @@ export class OdooModelController {
   })
   async getModelInfo(@Query('model') model?: string) {
     try {
-      // Note: This assumes odooService has getModelInfo. If not, we might need to implement it or use executeKw.
-      // For now, I will assume the user wants this controller active.
-      // If methods are missing in OdooService, I will need to add them.
-      // Checking OdooService... it seems it only has generic methods.
-      // I will implement these using executeKw.
       if (model) {
         const result = await this.odooService.executeKw(
           'ir.model',
@@ -71,10 +85,15 @@ export class OdooModelController {
         );
         return result;
       }
-      return await this.odooService.executeKw('ir.model', 'search_read', [], {
-        fields: ['name', 'model', 'info', 'state', 'transient'],
-        limit: 100,
-      });
+      return await this.odooService.executeKw(
+        'ir.model',
+        'search_read',
+        [this.allowlistDomain()],
+        {
+          fields: ['name', 'model', 'info', 'state', 'transient'],
+          limit: 100,
+        },
+      );
     } catch (error) {
       this.logger.error('Failed to get model info', error);
       throw new HttpException(
@@ -148,15 +167,11 @@ export class OdooModelController {
   })
   async getModelsByModule(@Param('moduleName') moduleName: string) {
     try {
-      // This is complex because mapping modules to models isn't direct in ir.model without joining.
-      // But we can search ir.model.data maybe? Or just search ir.model where modules contains the module?
-      // Let's try a simple search on ir.model.
-      // Actually, ir.model has a 'modules' field which is a string (comma separated) in some versions, or a relation.
-      // Let's assume standard Odoo behavior: ir.model has `modules` field.
+      // ir.model exposes a `modules` char field listing defining modules
       return await this.odooService.executeKw(
         'ir.model',
         'search_read',
-        [[['modules', 'ilike', moduleName]]],
+        [[['modules', 'ilike', moduleName], ...this.allowlistDomain()]],
         { fields: ['name', 'model', 'info'] },
       );
     } catch (error) {

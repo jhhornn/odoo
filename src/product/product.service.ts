@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  Optional,
+} from '@nestjs/common';
 import { BaseOdooService } from '../common/services/base.service';
 import { OdooService } from '../odoo/odoo.service';
 import { WebhookEmitterService } from '../webhook/services/webhook-emitter.service';
@@ -26,7 +31,7 @@ export class ProductService extends BaseOdooService {
 
   constructor(
     odooService: OdooService,
-    private readonly webhookEmitter: WebhookEmitterService,
+    @Optional() private readonly webhookEmitter?: WebhookEmitterService,
   ) {
     super(odooService, 'product.product');
   }
@@ -241,18 +246,24 @@ export class ProductService extends BaseOdooService {
    * Upsert a plan/product from an external system.
    * Checks existence by external_ref (Odoo `default_code` field), creates or updates accordingly.
    */
-  async upsert(dto: UpsertProductDto, context: ApiKeyContext) {
+  async upsert(
+    dto: UpsertProductDto,
+    context?: Pick<ApiKeyContext, 'systemName'>,
+  ) {
     const result = await this.executeUpsert(dto);
-    await this.webhookEmitter.emit(
-      context.systemName,
-      result.created ? 'product.created' : 'product.updated',
-      {
-        model: 'product.product',
-        externalRef: dto.external_ref,
-        productId: result.productId,
-        ...result,
-      },
-    );
+    // Webhooks fire only when WebhookModule is registered and a caller is known
+    if (this.webhookEmitter && context) {
+      await this.webhookEmitter.emit(
+        context.systemName,
+        result.created ? 'product.created' : 'product.updated',
+        {
+          model: 'product.product',
+          externalRef: dto.external_ref,
+          productId: result.productId,
+          ...result,
+        },
+      );
+    }
     return result;
   }
 

@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  id-token: write # npm provenance
 
 jobs:
   publish:
@@ -18,15 +18,15 @@ jobs:
         with:
           node-version: 20
           cache: yarn
-          registry-url: https://npm.pkg.github.com
-          scope: '@jhhornn'
+          registry-url: https://registry.npmjs.org
       - run: corepack enable
       - run: yarn install --frozen-lockfile
-      - run: npm run build
       - name: Verify tag matches package version
         run: node -e "if (process.env.GITHUB_REF_NAME !== 'v' + require('./package.json').version) process.exit(1)"
+      - run: npm run build
+      - run: node node_modules/eslint/bin/eslint.js "{src,test}/**/*.ts"
       - run: npm test -- --runInBand
       - run: npm run package:smoke
-      - run: npm publish
+      - run: npm publish --provenance --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

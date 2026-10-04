@@ -7,6 +7,8 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Min,
+  Max,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
@@ -145,6 +147,8 @@ export class FilterPartnerDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(1)
+  @Max(1000)
   limit?: number;
 
   @ApiPropertyOptional({ example: 0 })
@@ -164,3 +168,4 @@ export class FilterPartnerDto {
   @IsString({ each: true })
   fields?: string[];
 }
+export * from './upsert-partner.dto';

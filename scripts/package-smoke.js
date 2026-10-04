@@ -37,7 +37,11 @@ try {
     'OdooModule', 'RedisModule', 'DatabaseModule', 'AuthModule', 'WebhookModule',
     'PartnerModule', 'ProductModule', 'InvoiceModule', 'PaymentModule', 'TaxModule',
     'OdooService', 'PaymentService', 'TaxService', 'ApiKeyService', 'WebhookEmitterService',
+    'OdooApiModule', 'OdooServicesModule', 'ApiKeyAuth', 'Public', 'verifySignature',
+    'UpsertPartnerDto', 'ParseLimitPipe',
   ];
+  assert.equal(typeof library.OdooModule.forRoot, 'function', 'OdooModule.forRoot missing');
+  assert.equal(typeof library.OdooModule.forRootAsync, 'function', 'OdooModule.forRootAsync missing');
   for (const name of requiredExports) {
     assert.ok(library[name], 'Missing public export: ' + name);
   }

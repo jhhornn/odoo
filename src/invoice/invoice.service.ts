@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  Optional,
+} from '@nestjs/common';
 import { BaseOdooService } from '../common/services/base.service';
 import { OdooService } from '../odoo/odoo.service';
 import { WebhookEmitterService } from '../webhook/services/webhook-emitter.service';
@@ -29,7 +34,7 @@ export class InvoiceService extends BaseOdooService {
 
   constructor(
     odooService: OdooService,
-    private readonly webhookEmitter: WebhookEmitterService,
+    @Optional() private readonly webhookEmitter?: WebhookEmitterService,
   ) {
     super(odooService, 'account.move');
   }
@@ -318,18 +323,24 @@ export class InvoiceService extends BaseOdooService {
    * Upsert an invoice/bill from an external system.
    * Checks existence by external_ref (Odoo `ref` field), creates or updates (draft only).
    */
-  async upsert(dto: UpsertInvoiceDto, context: ApiKeyContext) {
+  async upsert(
+    dto: UpsertInvoiceDto,
+    context?: Pick<ApiKeyContext, 'systemName'>,
+  ) {
     const result = await this.executeUpsert(dto);
-    await this.webhookEmitter.emit(
-      context.systemName,
-      result.created ? 'invoice.created' : 'invoice.updated',
-      {
-        model: 'account.move',
-        externalRef: dto.external_ref,
-        invoiceId: result.invoiceId,
-        ...result,
-      },
-    );
+    // Webhooks fire only when WebhookModule is registered and a caller is known
+    if (this.webhookEmitter && context) {
+      await this.webhookEmitter.emit(
+        context.systemName,
+        result.created ? 'invoice.created' : 'invoice.updated',
+        {
+          model: 'account.move',
+          externalRef: dto.external_ref,
+          invoiceId: result.invoiceId,
+          ...result,
+        },
+      );
+    }
     return result;
   }
 

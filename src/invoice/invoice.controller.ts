@@ -18,14 +18,14 @@ import {
   ApiParam,
   ApiQuery,
   ApiHeader,
-  ApiSecurity,
 } from '@nestjs/swagger';
 import { InvoiceService } from './invoice.service';
 import { UpdateInvoiceDto, InvoiceDto, FilterInvoiceDto } from './dto';
 import { UpsertInvoiceDto } from './dto/upsert-invoice.dto';
+import { ParseLimitPipe } from '../common/pipes/parse-limit.pipe';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
 import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
-import { GetApiKeyContext } from '../auth/decorators';
+import { ApiKeyAuth, GetApiKeyContext } from '../auth/decorators';
 import { ApiKeyContext } from '../auth/interfaces';
 import { SearchDomain } from '../odoo/interfaces';
 
@@ -33,7 +33,7 @@ import { SearchDomain } from '../odoo/interfaces';
  * REST endpoints for Invoice operations
  */
 @ApiTags('Invoices')
-@ApiSecurity('X-API-Key')
+@ApiKeyAuth()
 @ApiCommonErrorResponses()
 @Controller('invoices')
 export class InvoiceController {
@@ -113,7 +113,7 @@ export class InvoiceController {
   @ApiStandardResponse({ status: 200, description: 'Partner invoices' })
   async getPartnerInvoices(
     @Param('partnerId', ParseIntPipe) partnerId: number,
-    @Query('limit') limit?: number,
+    @Query('limit', ParseLimitPipe) limit?: number,
   ) {
     return this.invoiceService.findByPartner(partnerId, limit);
   }

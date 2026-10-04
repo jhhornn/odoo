@@ -1,5 +1,6 @@
 import { Controller, Get, Query, Param, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiSecurity } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
+import { ApiKeyAuth } from '../auth/decorators';
 import { TaxService } from './tax.service';
 import { FilterTaxDto, TaxDto } from './dto';
 import { SearchDomain } from '../odoo/interfaces';
@@ -7,7 +8,7 @@ import { ApiStandardResponse } from '../common/decorators/api-response.decorator
 import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
 
 @ApiTags('Taxes')
-@ApiSecurity('X-API-Key')
+@ApiKeyAuth()
 @ApiCommonErrorResponses()
 @Controller('taxes')
 export class TaxController {

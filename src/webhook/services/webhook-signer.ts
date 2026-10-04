@@ -20,13 +20,17 @@ export function signPayload(
 /**
  * Verify a webhook signature header.
  * Rejects if timestamp is older than `toleranceMs` (default 5 minutes).
+ * Never throws: malformed or missing headers return `false`.
+ *
+ * Pass the raw request body exactly as received, not re-serialized JSON.
  */
 export function verifySignature(
   body: string,
   secret: string,
-  signatureHeader: string,
+  signatureHeader: string | undefined,
   toleranceMs = 300_000,
 ): boolean {
+  if (typeof signatureHeader !== 'string') return false;
   const parts = signatureHeader.split(',');
   const tPart = parts.find((p) => p.startsWith('t='));
   const vPart = parts.find((p) => p.startsWith('v1='));
@@ -47,8 +51,11 @@ export function verifySignature(
     .update(message)
     .digest('hex');
 
-  return crypto.timingSafeEqual(
-    Buffer.from(computedSig, 'hex'),
-    Buffer.from(expectedSig, 'hex'),
+  const expected = Buffer.from(computedSig, 'hex');
+  const received = Buffer.from(expectedSig, 'hex');
+  // timingSafeEqual throws on length mismatch; a malformed header is just invalid
+  return (
+    received.length === expected.length &&
+    crypto.timingSafeEqual(expected, received)
   );
 }

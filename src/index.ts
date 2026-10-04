@@ -6,7 +6,9 @@
  */
 
 // Infrastructure
-export { OdooModule } from './odoo/odoo.module';
+export { OdooModule, OdooCoreModule } from './odoo/odoo.module';
+export { OdooApiModule } from './odoo/odoo-api.module';
+export { OdooServicesModule } from './common/services/odoo-services.module';
 export { RedisModule } from './redis/redis.module';
 export * from './common/database';
 
@@ -30,13 +32,30 @@ export { TaxService } from './tax/tax.service';
 
 // Configuration
 export { OdooConfigService } from './odoo/infrastructure/config/odoo.config';
+export {
+  ODOO_MODULE_OPTIONS,
+  ODOO_API_MODULE_OPTIONS,
+  MAX_PAGE_LIMIT,
+} from './common/constants/app.constants';
+
+// Security helpers
+export {
+  OdooModelAccessGuard,
+  ODOO_MODEL_NAME_PATTERN,
+} from './odoo/guards/odoo-model-access.guard';
+export { ParseLimitPipe } from './common/pipes/parse-limit.pipe';
 
 // Exceptions and factories
 export {
   OdooException,
   OdooErrorCode,
 } from './odoo/infrastructure/exceptions/odoo.exception';
-export { XmlRpcClientFactory } from './odoo/factories/xml-rpc-client.factory';
+export { summarizeOdooFault } from './odoo/infrastructure/exceptions/odoo-fault.util';
+export {
+  XmlRpcClientFactory,
+  OdooTimeoutError,
+} from './odoo/factories/xml-rpc-client.factory';
+export type { XmlRpcClientOptions } from './odoo/factories/xml-rpc-client.factory';
 export { OdooServiceFactory } from './odoo/factories/odoo-service.factory';
 
 // Types and DTOs

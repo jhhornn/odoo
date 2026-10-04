@@ -6,15 +6,12 @@ import {
   Body,
   Param,
   HttpCode,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiKeyService } from '../services/api-key.service';
 import { CreateApiKeyDto } from '../dto';
-import { ScopeGuard } from '../guards';
-import { RequireScopes } from '../decorators';
+import { ApiKeyAuth } from '../decorators';
 
-@RequireScopes('admin')
-@UseGuards(ScopeGuard)
+@ApiKeyAuth('admin')
 @Controller('admin/api-keys')
 export class ApiKeyController {
   constructor(private readonly apiKeyService: ApiKeyService) {}

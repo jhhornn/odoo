@@ -18,22 +18,22 @@ import {
   ApiParam,
   ApiBody,
   ApiHeader,
-  ApiSecurity,
 } from '@nestjs/swagger';
 import { PartnerService } from './partner.service';
 import { SearchDomain } from '../odoo/interfaces';
 import { PartnerDto, FilterPartnerDto, UpdatePartnerDto } from './dto';
 import { UpsertPartnerDto } from './dto/upsert-partner.dto';
+import { ParseLimitPipe } from '../common/pipes/parse-limit.pipe';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
 import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
-import { GetApiKeyContext } from '../auth/decorators';
+import { ApiKeyAuth, GetApiKeyContext } from '../auth/decorators';
 import { ApiKeyContext } from '../auth/interfaces';
 
 /**
  * REST endpoints for Partner operations
  */
 @ApiTags('Partners')
-@ApiSecurity('X-API-Key')
+@ApiKeyAuth()
 @ApiCommonErrorResponses()
 @Controller('partners')
 export class PartnerController {
@@ -107,7 +107,7 @@ export class PartnerController {
   @ApiOperation({ summary: 'List all company partners' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiStandardResponse({ status: 200, description: 'List of companies' })
-  async getCompanies(@Query('limit') limit?: number) {
+  async getCompanies(@Query('limit', ParseLimitPipe) limit?: number) {
     return this.partnerService.findCompanies(limit);
   }
 
@@ -115,7 +115,7 @@ export class PartnerController {
   @ApiOperation({ summary: 'List all customer partners' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiStandardResponse({ status: 200, description: 'List of customers' })
-  async getCustomers(@Query('limit') limit?: number) {
+  async getCustomers(@Query('limit', ParseLimitPipe) limit?: number) {
     return this.partnerService.findCustomers(limit);
   }
 
@@ -123,7 +123,7 @@ export class PartnerController {
   @ApiOperation({ summary: 'List all supplier partners' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiStandardResponse({ status: 200, description: 'List of suppliers' })
-  async getSuppliers(@Query('limit') limit?: number) {
+  async getSuppliers(@Query('limit', ParseLimitPipe) limit?: number) {
     return this.partnerService.findSuppliers(limit);
   }
 
@@ -135,7 +135,7 @@ export class PartnerController {
   })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiStandardResponse({ status: 200, description: 'List of vendors' })
-  async getVendors(@Query('limit') limit?: number) {
+  async getVendors(@Query('limit', ParseLimitPipe) limit?: number) {
     return this.partnerService.findSuppliers(limit);
   }
 
@@ -150,7 +150,7 @@ export class PartnerController {
     status: 200,
     description: 'List of all customers and vendors',
   })
-  async getAllContacts(@Query('limit') limit?: number) {
+  async getAllContacts(@Query('limit', ParseLimitPipe) limit?: number) {
     return this.partnerService.findAllContacts(limit);
   }
 
@@ -167,7 +167,7 @@ export class PartnerController {
   @ApiStandardResponse({ status: 200, description: 'Search results' })
   async searchPartners(
     @Query('q') query: string,
-    @Query('limit') limit?: number,
+    @Query('limit', ParseLimitPipe) limit?: number,
     @Query('offset') offset?: number,
   ) {
     return this.partnerService.searchByNameOrEmail(query, limit, offset);
@@ -180,7 +180,7 @@ export class PartnerController {
   @ApiStandardResponse({ status: 200, description: 'Partners in country' })
   async getByCountry(
     @Param('countryId', ParseIntPipe) countryId: number,
-    @Query('limit') limit?: number,
+    @Query('limit', ParseLimitPipe) limit?: number,
   ) {
     return this.partnerService.findByCountry(countryId, limit);
   }

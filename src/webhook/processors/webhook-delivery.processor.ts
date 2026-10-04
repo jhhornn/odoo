@@ -7,6 +7,7 @@ import { signPayload } from '../services/webhook-signer';
 import { WebhookJobData } from '../services/webhook-emitter.service';
 import { decrypt } from '../../common/crypto/encryption.util';
 import { assertPublicHostname } from '../../common/security/ssrf.util';
+import { postWebhook } from '../services/webhook-http';
 import {
   WEBHOOK_QUEUE,
   WEBHOOK_BACKOFF_DELAYS_MS,
@@ -75,7 +76,8 @@ export class WebhookDeliveryProcessor extends WorkerHost {
       return; // Don't retry
     }
 
-    // DNS rebinding protection: re-resolve hostname at delivery time
+    // Fail fast on hosts that now resolve privately; postWebhook re-checks
+    // the exact address it connects to (DNS rebinding protection)
     const deliveryUrl = new URL(registration.url);
     await assertPublicHostname(deliveryUrl.hostname);
 
@@ -85,30 +87,22 @@ export class WebhookDeliveryProcessor extends WorkerHost {
     const signature = signPayload(payload, signingSecret, timestamp);
 
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        WEBHOOK_DELIVERY_TIMEOUT_MS,
-      );
-
-      const response = await fetch(registration.url, {
-        method: 'POST',
-        headers: {
+      // Connect-time IP validation and no redirects: see postWebhook()
+      const response = await postWebhook(
+        registration.url,
+        payload,
+        {
           'Content-Type': 'application/json',
           'X-Webhook-Signature': signature,
           'X-Webhook-ID': eventId,
           'X-Webhook-Event': eventType,
           'User-Agent': 'NestJS-Odoo-Webhook/1.0',
         },
-        body: payload,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
+        { timeoutMs: WEBHOOK_DELIVERY_TIMEOUT_MS },
+      );
 
       const latencyMs = Date.now() - startTime;
-      const responseBody = await response.text().catch(() => '');
-      const preview = responseBody.substring(
+      const preview = response.body.substring(
         0,
         WEBHOOK_RESPONSE_PREVIEW_LENGTH,
       );
@@ -143,7 +137,9 @@ export class WebhookDeliveryProcessor extends WorkerHost {
       // Non-2xx response
       // Handle 429 with Retry-After
       if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after');
+        const retryAfter = response.headers['retry-after'] as
+          | string
+          | undefined;
         const delayMs = retryAfter
           ? parseInt(retryAfter, 10) * 1000
           : WEBHOOK_BACKOFF_DELAYS_MS[

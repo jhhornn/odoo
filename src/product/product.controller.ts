@@ -19,21 +19,21 @@ import {
   ApiParam,
   ApiBody,
   ApiHeader,
-  ApiSecurity,
 } from '@nestjs/swagger';
 import { ProductService } from './product.service';
 import { FilterProductDto, ProductDto } from './dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpsertProductDto } from './dto/upsert-product.dto';
 import { SearchDomain } from '../odoo/interfaces';
-import { GetApiKeyContext } from '../auth/decorators';
+import { ApiKeyAuth, GetApiKeyContext } from '../auth/decorators';
 import { ApiKeyContext } from '../auth/interfaces';
 import { errRecordNotFound } from '../common/constants';
+import { ParseLimitPipe } from '../common/pipes/parse-limit.pipe';
 import { ApiStandardResponse } from '../common/decorators/api-response.decorator';
 import { ApiCommonErrorResponses } from '../common/decorators/api-error-responses.decorator';
 
 @ApiTags('Products')
-@ApiSecurity('X-API-Key')
+@ApiKeyAuth()
 @ApiCommonErrorResponses()
 @Controller('products')
 export class ProductController {
@@ -96,7 +96,7 @@ export class ProductController {
   @ApiOperation({ summary: 'List products available for sale' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiStandardResponse({ status: 200, description: 'Available products' })
-  async getAvailableProducts(@Query('limit') limit?: number) {
+  async getAvailableProducts(@Query('limit', ParseLimitPipe) limit?: number) {
     return this.productService.findAvailableProducts(limit);
   }
 
@@ -104,7 +104,7 @@ export class ProductController {
   @ApiOperation({ summary: 'List products currently in stock' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiStandardResponse({ status: 200, description: 'Products in stock' })
-  async getInStockProducts(@Query('limit') limit?: number) {
+  async getInStockProducts(@Query('limit', ParseLimitPipe) limit?: number) {
     return this.productService.findInStock(limit);
   }
 
@@ -120,7 +120,7 @@ export class ProductController {
   @ApiStandardResponse({ status: 200, description: 'Low stock products' })
   async getLowStockProducts(
     @Query('threshold') threshold?: number,
-    @Query('limit') limit?: number,
+    @Query('limit', ParseLimitPipe) limit?: number,
   ) {
     return this.productService.findLowStock(threshold, limit);
   }
@@ -132,7 +132,7 @@ export class ProductController {
   @ApiStandardResponse({ status: 200, description: 'Search results' })
   async searchProducts(
     @Query('q') query: string,
-    @Query('limit') limit?: number,
+    @Query('limit', ParseLimitPipe) limit?: number,
   ) {
     return this.productService.searchProducts(query, limit);
   }
@@ -148,7 +148,7 @@ export class ProductController {
   @ApiStandardResponse({ status: 200, description: 'Products in category' })
   async getProductsByCategory(
     @Param('categoryId', ParseIntPipe) categoryId: number,
-    @Query('limit') limit?: number,
+    @Query('limit', ParseLimitPipe) limit?: number,
   ) {
     return this.productService.findByCategory(categoryId, limit);
   }

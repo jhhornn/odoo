@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { DatabaseService } from '../../common/database/database.service';
-import { ApiKeyProvider } from '../providers/api-key.provider';
+import { ApiKeyProvider, apiKeyLookupId } from '../providers/api-key.provider';
 import {
   API_KEY_PREFIX,
   LOG_API_KEY_CREATED,
@@ -19,7 +19,7 @@ export class ApiKeyService {
 
   /**
    * Create a new API key. Returns the plaintext key exactly once.
-   * Only the SHA-256 hash and 8-char prefix are stored.
+   * Only the scrypt hash and an 8-char lookup identifier are stored.
    */
   async create(data: {
     systemName: string;
@@ -29,7 +29,7 @@ export class ApiKeyService {
   }): Promise<{ id: string; key: string; prefix: string; systemName: string }> {
     const rawBytes = crypto.randomBytes(32);
     const rawKey = API_KEY_PREFIX + rawBytes.toString('base64url');
-    const prefix = rawKey.slice(0, 8);
+    const prefix = apiKeyLookupId(rawKey);
     const keyHash = await this.keyProvider.hashKey(rawKey);
 
     const record = await this.db.apiKey.create({
@@ -88,8 +88,7 @@ export class ApiKeyService {
       data: { isActive: false, revokedAt: new Date() },
     });
 
-    // Evict from cache by hash
-    await this.keyProvider.evict(record.keyHash);
+    await this.keyProvider.evictKeyId(record.id);
 
     this.logger.log({
       msg: LOG_API_KEY_REVOKED,
